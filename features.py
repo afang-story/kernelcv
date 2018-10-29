@@ -77,7 +77,7 @@ def get_features(X_train, X_test, img_shape, n_features, feature_block, patch_sh
             if X_lift_train_b is None:
                 X_lift_train_b = X_lift_train_f
             else:
-                X_lift_train_b = np.hstack((X_lift_train_b, X_lift_train_f))
+                X_lift_train_b = np.dstack((X_lift_train_b, X_lift_train_f))
         if X_lift_train is None:
             X_lift_train = X_lift_train_b
         else:
@@ -92,7 +92,7 @@ def get_features(X_train, X_test, img_shape, n_features, feature_block, patch_sh
         if X_lift_test is None:
             X_lift_test = X_lift_test_f
         else:
-            X_lift_test = np.hstack((X_lift_test, X_lift_test_f))
+            X_lift_test = np.dstack((X_lift_test, X_lift_test_f))
     print(X_lift_train.shape)
 
     print('Pool')
