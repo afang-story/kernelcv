@@ -14,10 +14,10 @@ def read_idx(filename):
 
 
 # Hyperparameters
-reg = 0.01
+reg = 1
 patch_shape = (6,6)
-n_features = 1024
-block = 128
+n_features = 1024+512
+block = 512
 pool_size = 2
 
 train_name = 'train-images-idx3-ubyte'
@@ -47,4 +47,4 @@ print("Predicting")
 y_pred = clf.predict(X_feat_test)
 acc =[1 if y_pred[i] == y_test[i] else 0 for i in range(len(y_pred))]
 acc = sum(acc)/len(y_pred)
-print("Accuracy is " + str(acc))
+print("Accuracy is " + str(acc)) # 0.9907 pytorch features

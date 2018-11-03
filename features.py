@@ -1,7 +1,9 @@
 import numpy as np, scipy as scp, random
+import torch
 from sklearn.kernel_approximation import RBFSampler
 from scipy.signal import convolve2d
 from skimage.measure import block_reduce
+from coatesng import BasicCoatesNgNet
 
 # https://stackoverflow.com/questions/31528800/how-to-implement-zca-whitening-python
 def ZCA(X):
@@ -22,15 +24,6 @@ def patchify(img, patch_shape, img_shape):
     patches_shape = patches.shape
     return patches.reshape((patches_shape[0] * patches_shape[1], patch_shape[0], patch_shape[1]))
 
-def convolution(patches, weights, offset):
-    print("in")
-    patches = patches.reshape((patches.shape[0], patches.shape[1], -1))
-    X_lift = np.zeros((len(patches), patches.shape[1], len(offset))) #60000 529 36
-    print(patches.shape)
-    for p in range(len(patches)):
-        X_lift[p] = np.cos(np.dot(patches[p], weights) + offset)
-    return np.array(X_lift)
-
 def pool(x, pool_size, im_shape):
     x = x.reshape(im_shape)
     if (im_shape[0] / 2 == int(im_shape[0] / 2)): #even
@@ -44,6 +37,22 @@ def pool_all(X, n, pool_size, im_shape):
     for i in range(n):
         pooled.append(pool(X[:, i], pool_size, im_shape))
     return np.ndarray.flatten(np.array(pooled))
+
+def pytorch_features(X, patches, patch_shape):
+    sigma = 1.0
+    filters = patches.reshape(len(patches), 1, patch_shape[0], patch_shape[0])
+    net = BasicCoatesNgNet(filters, patch_size=patch_shape[0], in_channels=1, pool_size=12, pool_stride=12, bias=1.0, filter_batch_size=128)
+    lift = None
+    blocks = 40
+    b_size = int(len(X)/blocks)
+    for i in range(blocks):
+        if lift is None:
+            lift = net(torch.from_numpy(X[i*b_size:(i+1)*b_size].reshape(b_size,1,28,28))).detach().numpy()
+        else:
+            lift = np.vstack((lift, net(torch.from_numpy(X[i*b_size:(i+1)*b_size].reshape(b_size,1,28,28))).detach().numpy()))
+        print(lift.shape)
+    print(lift.shape)
+    return lift
 
 def get_features(X_train, X_test, img_shape, n_features, feature_block, patch_shape, pool_size):
     sampler = (RBFSampler(gamma=4, n_components=n_features)).fit(np.zeros((1, patch_shape[0] * patch_shape[1])))
@@ -64,42 +73,16 @@ def get_features(X_train, X_test, img_shape, n_features, feature_block, patch_sh
     patches_test = np.dot(patches_test.reshape(-1, patch_shape[0]*patch_shape[1]), whitener.T).reshape(patches_test.shape)
     print(patches_train.shape)
 
+    indices = np.random.choice(range(len(patches_train.reshape(-1, patch_shape[0]*patch_shape[1]))), n_features)
+    patches_train = patches_train.reshape(-1, patch_shape[0]*patch_shape[1])[indices]
+
     print('Convolve Patches to Features')
-    b_size = int(len(patches_train)/5)
-    X_lift_train = None
-    for i in range(5):
-        print(i)
-        X_lift_train_b = None
-        for j in range(int(n_features/feature_block)):
-            weights = sampler.random_weights_[:, j*feature_block: (j+1)*feature_block]
-            offset = sampler.random_offset_[j*feature_block: (j+1)*feature_block]
-            X_lift_train_f = convolution(patches_train[i*b_size:(i+1)*b_size], weights, offset)
-            if X_lift_train_b is None:
-                X_lift_train_b = X_lift_train_f
-            else:
-                X_lift_train_b = np.dstack((X_lift_train_b, X_lift_train_f))
-        if X_lift_train is None:
-            X_lift_train = X_lift_train_b
-        else:
-            X_lift_train = np.vstack((X_lift_train, X_lift_train_b))
-
-    # X_lift_test = convolution(patches_test, weights, offset)
-    X_lift_test = None
-    for j in range(int(n_features/feature_block)):
-        weights = sampler.random_weights_[:, j*feature_block: (j+1)*feature_block]
-        offset = sampler.random_offset_[j*feature_block: (j+1)*feature_block]
-        X_lift_test_f = convolution(patches_test, weights, offset)
-        if X_lift_test is None:
-            X_lift_test = X_lift_test_f
-        else:
-            X_lift_test = np.dstack((X_lift_test, X_lift_test_f))
+    X_lift_train = pytorch_features(X_train, patches_train, patch_shape)
     print(X_lift_train.shape)
+    X_lift_test = pytorch_features(X_test, patches_train, patch_shape)
+    np.savetxt('lift_train.csv', X_lift_train.reshape(len(X_train), -1), delimiter=',')
+    np.savetxt('lift_test.csv', X_lift_test.reshape(len(X_test), -1), delimiter=',')
 
-    print('Pool')
-    im_shape = (int(np.sqrt(X_lift_train.shape[1])), int(np.sqrt(X_lift_train.shape[1])))
-    X_lift_train = np.array([pool_all(x, len(sampler.random_offset_), pool_size, im_shape) for x in X_lift_train])
-    X_lift_test = np.array([pool_all(x,len(sampler.random_offset_),pool_size, im_shape) for x in X_lift_test])
-    print(X_lift_train.shape)
     return (X_lift_train.reshape(len(X_train), -1), X_lift_test.reshape(len(X_test), -1))
 
 def get_simple_features(X_train, X_test):
