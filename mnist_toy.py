@@ -12,12 +12,12 @@ from features import get_features, get_simple_features
 # Parameters
 experiment = 'CIFAR10'
 reg = 1
-patch_shape = (6,6)
-n_features = 2048
-block = 200
+n_features = 1024
+block = 400
 pool_size = 3
 
 if experiment == 'MNIST':
+    patch_shape = (6,6)
     transform = transforms.Compose([transforms.ToTensor(), transforms.Normalize((0.5,), (1.0,))])
 
     trainset = torchvision.datasets.MNIST(root='./data', train=True,
@@ -29,6 +29,7 @@ if experiment == 'MNIST':
     X_test = testset.test_data.cpu().detach().numpy()
     y_test = testset.test_labels.cpu().detach().numpy()
 elif experiment == 'CIFAR10':
+    patch_shape = (6,6,3)
     transform = transforms.Compose(
         [transforms.ToTensor(),
         transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))])
@@ -41,7 +42,6 @@ elif experiment == 'CIFAR10':
     y_train = np.array(trainset.train_labels)
     X_test = testset.test_data
     y_test = np.array(testset.test_labels)
-    patch_shape = (6,6,3)
 else:
     print("Not supported")
     sys.exit()
@@ -60,7 +60,7 @@ X_train = X_train.reshape((len(X_train), -1))
 X_test = X_test.reshape((len(X_test), -1))
 
 X_feat_train, X_feat_test = get_features(X_train, X_test, img_shape, n_features, block, patch_shape, pool_size)
-
+print(X_feat_train.shape)
 # X_feat_train, X_feat_test = get_simple_features(X_train, X_test, 1024) #.9758 acc when 4096 features
 
 # X_feat_train = np.loadtxt('lift_train.csv', delimiter=",")

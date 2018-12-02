@@ -51,8 +51,7 @@ def patchify(img, patch_shape, img_shape):
 #     return np.ndarray.flatten(np.array(pooled))
 
 def pytorch_features(X, patches, img_shape, patch_shape, block_size, pool_size):
-    sigma = 1.0
-    filters = patches.reshape(len(patches), patch_shape[2], patch_shape[0], patch_shape[1])
+    filters = patches.reshape(len(patches), patch_shape[0], patch_shape[1], patch_shape[2]).transpose(0,3,1,2)
     pool_kernel_size = int(np.ceil((img_shape[0] - patch_shape[0]) / pool_size))
     net = BasicCoatesNgNet(filters, patch_size=patch_shape[0], in_channels=patch_shape[2], pool_size=pool_kernel_size, pool_stride=pool_kernel_size, bias=1.0, filter_batch_size=128)
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
@@ -61,9 +60,9 @@ def pytorch_features(X, patches, img_shape, patch_shape, block_size, pool_size):
     blocks = int(np.ceil(len(X)/b_size))
     for i in range(blocks):
         if lift is None:
-            lift = net(torch.from_numpy(X[i*b_size:(i+1)*b_size].reshape(-1,img_shape[2],img_shape[0],img_shape[1])).to(device)).cpu().detach().numpy()
+            lift = net(torch.from_numpy(X[i*b_size:(i+1)*b_size].reshape(-1,img_shape[0],img_shape[1],img_shape[2]).transpose(0,3,1,2)).to(device)).cpu().detach().numpy()
         else:
-            lift = np.vstack((lift, net(torch.from_numpy(X[i*b_size:(i+1)*b_size].reshape(-1,img_shape[2],img_shape[0],img_shape[1])).to(device)).cpu().detach().numpy()))
+            lift = np.vstack((lift, net(torch.from_numpy(X[i*b_size:(i+1)*b_size].reshape(-1,img_shape[0],img_shape[1],img_shape[2]).transpose(0,3,1,2)).to(device)).cpu().detach().numpy()))
         print(lift.shape)
     # lift = net(torch.from_numpy(X.reshape(len(X), img_shape[2], img_shape[0], img_shape[1])).to(device)).detach().numpy()
     # print(lift.shape)
