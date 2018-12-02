@@ -13,8 +13,8 @@ from features import get_features, get_simple_features
 experiment = 'CIFAR10'
 reg = 1
 patch_shape = (6,6)
-n_features = 1024
-block = 600
+n_features = 2048
+block = 200
 pool_size = 3
 
 if experiment == 'MNIST':
@@ -77,7 +77,8 @@ A = X_feat_train
 #     left += np.outer(A[i], np.transpose(A[i]))
 # left = left + reg*np.identity(A.shape[1])
 # w = np.dot(np.linalg.inv(left), right)
-w = np.dot(np.dot(A.T, np.linalg.inv(np.dot(A, A.T) + reg*np.identity(len(A)))), y_train_ohe)
+w = np.dot(np.linalg.inv(np.dot(A.T, A) + reg*np.identity(A.shape[1])), np.dot(A.T, y_train_ohe))
+# w = np.dot(np.dot(A.T, np.linalg.inv(np.dot(A, A.T) + reg*np.identity(len(A)))), y_train_ohe)
 print(w.shape)
 print("Predicting")
 y_pred = np.array([np.argmax(np.dot(np.transpose(w), x)) for x in X_feat_test])

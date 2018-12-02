@@ -14,7 +14,6 @@ def ZCA(X):
     return ZCAMatrix
 
 # https://stackoverflow.com/questions/16774148/fast-way-to-slice-image-into-overlapping-patches-and-merge-patches-to-image/16788733
-# https://stackoverflow.com/questions/42336919/how-to-extract-paches-from-3d-image-in-python
 def patchify(img, patch_shape, img_shape):
     img = np.ascontiguousarray(img)
 
@@ -66,7 +65,6 @@ def pytorch_features(X, patches, img_shape, patch_shape, block_size, pool_size):
         else:
             lift = np.vstack((lift, net(torch.from_numpy(X[i*b_size:(i+1)*b_size].reshape(-1,img_shape[2],img_shape[0],img_shape[1])).to(device)).cpu().detach().numpy()))
         print(lift.shape)
-    print(X.shape)
     # lift = net(torch.from_numpy(X.reshape(len(X), img_shape[2], img_shape[0], img_shape[1])).to(device)).detach().numpy()
     # print(lift.shape)
     return lift
