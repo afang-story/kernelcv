@@ -2,7 +2,7 @@ import numpy as np, scipy as scp, random
 import torch
 import sys
 
-from skimage.measure import block_reduce
+# from skimage.measure import block_reduce
 from coatesng import BasicCoatesNgNet
 
 # https://stackoverflow.com/questions/31528800/how-to-implement-zca-whitening-python
@@ -24,7 +24,7 @@ def patchify(img, patch_shape, img_shape):
         shape = (X - x + 1, Y - y + 1, x, y)
         strides = img.itemsize * np.array([Y, 1, Y, 1])
         patches = np.lib.stride_tricks.as_strided(img, shape=shape, strides=strides)
-        return patches.reshape((patches_shape[0] * patches_shape[1], patch_shape[0], patch_shape[1]))
+        return patches.reshape((patches.shape[0] * patches.shape[1], patch_shape[0], patch_shape[1]))
     elif patch_shape[2] == 3:
         sh = np.array(img.shape)
         blck = np.asanyarray(patch_shape)
@@ -58,23 +58,26 @@ def pytorch_features(X, patches, img_shape, patch_shape, block_size, pool_size):
     filters = patches.reshape(len(patches), patch_shape[2], patch_shape[0], patch_shape[1])
     pool_kernel_size = int(np.ceil((img_shape[0] - patch_shape[0]) / pool_size))
     net = BasicCoatesNgNet(filters, patch_size=patch_shape[0], in_channels=patch_shape[2], pool_size=pool_kernel_size, pool_stride=pool_kernel_size, bias=1.0, filter_batch_size=128)
+    device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
     lift = None
-    blocks = 40
-    b_size = int(len(X)/blocks)
+    b_size = block_size
+    blocks = int(np.ceil(len(X)/b_size))
     for i in range(blocks):
         if lift is None:
-            lift = net(torch.from_numpy(X[i*b_size:(i+1)*b_size].reshape(b_size,img_shape[2],img_shape[0],img_shape[1]))).detach().numpy()
+            lift = net(torch.from_numpy(X[i*b_size:(i+1)*b_size].reshape(-1,img_shape[2],img_shape[0],img_shape[1])).to(device)).cpu().detach().numpy()
         else:
-            lift = np.vstack((lift, net(torch.from_numpy(X[i*b_size:(i+1)*b_size].reshape(b_size,img_shape[2],img_shape[0],img_shape[1]))).detach().numpy()))
+            lift = np.vstack((lift, net(torch.from_numpy(X[i*b_size:(i+1)*b_size].reshape(-1,img_shape[2],img_shape[0],img_shape[1])).to(device)).cpu().detach().numpy()))
         print(lift.shape)
-    print(lift.shape)
+    print(X.shape)
+    # lift = net(torch.from_numpy(X.reshape(len(X), img_shape[2], img_shape[0], img_shape[1])).to(device)).detach().numpy()
+    # print(lift.shape)
     return lift
 
 def get_features(X_train, X_test, img_shape, n_features, block_size, patch_shape, pool_size):
     if len(patch_shape) == 2:
         patch_shape = np.r_[patch_shape, 1]
     if len(img_shape) == 2:
-        image_shape = np.r_[img_shape, 1]
+        img_shape = np.r_[img_shape, 1]
     print('Get Patches')
     X_train_c = X_train.copy()
     X_test_c = X_test.copy()
@@ -98,8 +101,8 @@ def get_features(X_train, X_test, img_shape, n_features, block_size, patch_shape
     X_lift_train = pytorch_features(X_train, patches_train, img_shape, patch_shape, block_size, pool_size)
     print(X_lift_train.shape)
     X_lift_test = pytorch_features(X_test, patches_train, img_shape, patch_shape, block_size, pool_size)
-    np.savetxt('lift_train.csv', X_lift_train.reshape(len(X_train), -1), delimiter=',')
-    np.savetxt('lift_test.csv', X_lift_test.reshape(len(X_test), -1), delimiter=',')
+    # np.savetxt('lift_train.csv', X_lift_train.reshape(len(X_train), -1), delimiter=',')
+    # np.savetxt('lift_test.csv', X_lift_test.reshape(len(X_test), -1), delimiter=',')
 
     return (X_lift_train.reshape(len(X_train), -1), X_lift_test.reshape(len(X_test), -1))
 

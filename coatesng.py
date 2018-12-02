@@ -25,7 +25,7 @@ class BasicCoatesNgNet(nn.Module):
         self.active_filter_set = []
         self.start = None
         self.end  = None
-        self.gpu = torch.cuda.is_available()
+        self.use_gpu = torch.cuda.is_available()
 
     def _forward(self, x):
         # Max pooling over a (2, 2) window
