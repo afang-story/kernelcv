@@ -25,7 +25,7 @@ class BasicCoatesNgNet(nn.Module):
         self.active_filter_set = []
         self.start = None
         self.end  = None
-        self.gpu = False
+        self.gpu = torch.cuda.is_available()
 
     def _forward(self, x):
         # Max pooling over a (2, 2) window
@@ -67,8 +67,8 @@ class BasicCoatesNgNet(nn.Module):
         self.start = start
         self.end = end
         filter_set = torch.from_numpy(self.filters[start:end])
-        # if (self.use_gpu):
-        #     filter_set = filter_set.cuda()
+        if (self.use_gpu):
+            filter_set = filter_set.cuda()
         conv = nn.Conv2d(self.in_channels, end - start, self.patch_size, bias=False)
         conv.weight = nn.Parameter(filter_set)
         self.conv = None
