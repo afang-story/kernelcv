@@ -41,6 +41,7 @@ elif experiment == 'CIFAR10':
     y_train = np.array(trainset.train_labels)
     X_test = testset.test_data
     y_test = np.array(testset.test_labels)
+    patch_shape = (6,6,3)
 else:
     print("Not supported")
     sys.exit()
