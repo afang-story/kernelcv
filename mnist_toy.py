@@ -6,7 +6,7 @@ import torch
 import torchvision
 import torchvision.transforms as transforms
 
-from sklearn.preprocessing import OneHotEncoder
+from sklearn.preprocessing import OneHotEncoder, scale
 from features import get_features, get_simple_features
 
 # Parameters
@@ -18,26 +18,22 @@ pool_size = 3
 
 if experiment == 'MNIST':
     patch_shape = (6,6)
-    transform = transforms.Compose([transforms.ToTensor(), transforms.Normalize((0.5,), (1.0,))])
 
     trainset = torchvision.datasets.MNIST(root='./data', train=True,
-                                            download=True, transform=transform)
+                                            download=True, transform=None)
     testset = torchvision.datasets.MNIST(root='./data', train=False,
-                                           download=True, transform=transform)
+                                           download=True, transform=None)
     X_train = trainset.train_data.cpu().detach().numpy()
     y_train = trainset.train_labels.cpu().detach().numpy()
     X_test = testset.test_data.cpu().detach().numpy()
     y_test = testset.test_labels.cpu().detach().numpy()
 elif experiment == 'CIFAR10':
     patch_shape = (6,6,3)
-    transform = transforms.Compose(
-        [transforms.ToTensor(),
-        transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))])
 
     trainset = torchvision.datasets.CIFAR10(root='./data', train=True,
-                                        download=True, transform=transform)
+                                        download=True, transform=None)
     testset = torchvision.datasets.CIFAR10(root='./data', train=False,
-                                       download=True, transform=transform)
+                                       download=True, transform=None)
     X_train = trainset.train_data
     y_train = np.array(trainset.train_labels)
     X_test = testset.test_data
@@ -45,7 +41,6 @@ elif experiment == 'CIFAR10':
 else:
     print("Not supported")
     sys.exit()
-
 
 X_train = X_train / 255.
 X_test = X_test / 255.
@@ -58,13 +53,11 @@ img_shape = X_train[0].shape
 
 X_train = X_train.reshape((len(X_train), -1))
 X_test = X_test.reshape((len(X_test), -1))
+X_train -= np.mean(X_train, axis=0)
+X_test -= np.mean(X_test, axis=0)
 
 X_feat_train, X_feat_test = get_features(X_train, X_test, img_shape, n_features, block, patch_shape, pool_size)
 print(X_feat_train.shape)
-# X_feat_train, X_feat_test = get_simple_features(X_train, X_test, 1024) #.9758 acc when 4096 features
-
-# X_feat_train = np.loadtxt('lift_train.csv', delimiter=",")
-# X_feat_test = np.loadtxt('lift_test.csv', delimiter=",")
 
 print("Getting Matrix")
 A = X_feat_train
@@ -81,7 +74,13 @@ w = np.dot(np.linalg.inv(np.dot(A.T, A) + reg*np.identity(A.shape[1])), np.dot(A
 # w = np.dot(np.dot(A.T, np.linalg.inv(np.dot(A, A.T) + reg*np.identity(len(A)))), y_train_ohe)
 print(w.shape)
 print("Predicting")
+y_pred = np.array([np.argmax(np.dot(np.transpose(w), x)) for x in X_feat_train])
+train_acc =[1 if y_pred[i] == y_train[i] else 0 for i in range(len(y_pred))]
+train_acc = sum(train_acc)/len(y_pred)
+print("Training Accuracy is " + str(train_acc))
 y_pred = np.array([np.argmax(np.dot(np.transpose(w), x)) for x in X_feat_test])
 acc =[1 if y_pred[i] == y_test[i] else 0 for i in range(len(y_pred))]
 acc = sum(acc)/len(y_pred)
-print("Accuracy is " + str(acc)) # 0.9907 pytorch features
+print("Test Accuracy is " + str(acc))
+with open('results.txt', 'a') as f:
+    f.write('Train Accuracy: ' + str(train_acc) + ' Test Accuracy: ' + str(acc))
