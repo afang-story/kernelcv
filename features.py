@@ -61,16 +61,16 @@ def get_features(X_train, X_test, img_shape, n_features, block_size, patch_shape
     X_train_c = X_train.copy()
     X_test_c = X_test.copy()
     patches_train = np.array([patchify(x, patch_shape, img_shape) for x in X_train_c])
-    # patches_test = np.array([patchify(x, patch_shape, img_shape) for x in X_test_c])
     print(patches_train.shape)
 
     print("Whiten")
     # indices = np.random.choice(range(len(patches_train.reshape(-1, int(np.prod(patch_shape))))), 10000, replace=False)
     patches = patches_train.reshape(-1, int(np.prod(patch_shape)))
+    patches -= np.mean(patches, axis=0) # try centering, should not affect, try scale after
     whitener = ZCA(patches.T)
     print(whitener.shape)
-    patches_train = np.dot(patches_train.reshape(-1, int(np.prod(patch_shape))), whitener.T).reshape(patches_train.shape)
-    # patches_test = np.dot(patches_test.reshape(-1, int(np.prod(patch_shape))), whitener.T).reshape(patches_test.shape)
+    # patches_train = np.dot(patches_train.reshape(-1, int(np.prod(patch_shape))), whitener.T).reshape(patches_train.shape)
+    patches_train = np.dot(patches, whitener.T).reshape(patches_train.shape)
     print(patches_train.shape)
 
     indices = np.random.choice(range(len(patches_train.reshape(-1, int(np.prod(patch_shape))))), n_features, replace=False)
