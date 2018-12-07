@@ -13,7 +13,7 @@ from features import get_features, get_simple_features
 experiment = 'CIFAR10'
 reg = 1
 n_features = 1024
-block = 400
+block = 300
 pool_size = 3
 
 if experiment == 'MNIST':
@@ -57,7 +57,6 @@ X_train -= np.mean(X_train, axis=0)
 X_test -= np.mean(X_test, axis=0)
 
 X_feat_train, X_feat_test = get_features(X_train, X_test, img_shape, n_features, block, patch_shape, pool_size)
-print(X_feat_train.shape)
 
 print("Getting Matrix")
 A = X_feat_train
@@ -70,17 +69,20 @@ A = X_feat_train
 #     left += np.outer(A[i], np.transpose(A[i]))
 # left = left + reg*np.identity(A.shape[1])
 # w = np.dot(np.linalg.inv(left), right)
-w = np.dot(np.linalg.inv(np.dot(A.T, A) + reg*np.identity(A.shape[1])), np.dot(A.T, y_train_ohe))
-# w = np.dot(np.dot(A.T, np.linalg.inv(np.dot(A, A.T) + reg*np.identity(len(A)))), y_train_ohe)
-print(w.shape)
-print("Predicting")
-y_pred = np.array([np.argmax(np.dot(np.transpose(w), x)) for x in X_feat_train])
-train_acc =[1 if y_pred[i] == y_train[i] else 0 for i in range(len(y_pred))]
-train_acc = sum(train_acc)/len(y_pred)
-print("Training Accuracy is " + str(train_acc))
-y_pred = np.array([np.argmax(np.dot(np.transpose(w), x)) for x in X_feat_test])
-acc =[1 if y_pred[i] == y_test[i] else 0 for i in range(len(y_pred))]
-acc = sum(acc)/len(y_pred)
-print("Test Accuracy is " + str(acc))
-with open('results.txt', 'a') as f:
-    f.write('Train Accuracy: ' + str(train_acc) + ' Test Accuracy: ' + str(acc))
+regs = [0.5, 1, 1.5, 2, 5, 10]
+for reg in regs:
+    print(reg)
+    w = np.dot(np.linalg.inv(np.dot(A.T, A) + reg*np.identity(A.shape[1])), np.dot(A.T, y_train_ohe))
+    # w = np.dot(np.dot(A.T, np.linalg.inv(np.dot(A, A.T) + reg*np.identity(len(A)))), y_train_ohe)
+    #print(w.shape)
+    print("Predicting")
+    y_pred = np.array([np.argmax(np.dot(np.transpose(w), x)) for x in X_feat_train])
+    train_acc =[1 if y_pred[i] == y_train[i] else 0 for i in range(len(y_pred))]
+    train_acc = sum(train_acc)/len(y_pred)
+    print("Training Accuracy is " + str(train_acc))
+    y_pred = np.array([np.argmax(np.dot(np.transpose(w), x)) for x in X_feat_test])
+    acc =[1 if y_pred[i] == y_test[i] else 0 for i in range(len(y_pred))]
+    acc = sum(acc)/len(y_pred)
+    print("Test Accuracy is " + str(acc))
+# with open('results.txt', 'a') as f:
+#     f.write('Train Accuracy: ' + str(train_acc) + ' Test Accuracy: ' + str(acc))
