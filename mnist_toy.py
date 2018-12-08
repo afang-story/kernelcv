@@ -1,4 +1,5 @@
 import numpy as np
+import scipy
 import random
 import sys
 
@@ -13,7 +14,7 @@ from features import get_features, get_simple_features
 experiment = 'CIFAR10'
 reg = 1
 n_features = 1024
-block = 300
+block = 400
 pool_size = 3
 
 if experiment == 'MNIST':
@@ -57,7 +58,8 @@ X_train -= np.mean(X_train, axis=0)
 X_test -= np.mean(X_test, axis=0)
 
 X_feat_train, X_feat_test = get_features(X_train, X_test, img_shape, n_features, block, patch_shape, pool_size)
-
+X_feat_train = np.float64(X_feat_train)
+X_feat_test = np.float64(X_feat_test)
 print("Getting Matrix")
 A = X_feat_train
 # right = np.zeros((A.shape[1], y_train_ohe.shape[1]))
@@ -69,11 +71,15 @@ A = X_feat_train
 #     left += np.outer(A[i], np.transpose(A[i]))
 # left = left + reg*np.identity(A.shape[1])
 # w = np.dot(np.linalg.inv(left), right)
-regs = [0.5, 1, 1.5, 2, 5, 10]
+# regs = [100,110,120,150,200, 300, 500, 700, 1000]
+regs = [50, 52, 54, 56, 58]
+ATA = np.dot(A.T, A)
+b = np.dot(A.T, y_train_ohe)
+# AAT = np.dot(A, A.T)
 for reg in regs:
     print(reg)
-    w = np.dot(np.linalg.inv(np.dot(A.T, A) + reg*np.identity(A.shape[1])), np.dot(A.T, y_train_ohe))
-    # w = np.dot(np.dot(A.T, np.linalg.inv(np.dot(A, A.T) + reg*np.identity(len(A)))), y_train_ohe)
+    w = scipy.linalg.solve(ATA + reg*np.identity(A.shape[1]), b)
+    # w = np.dot(np.dot(A.T, np.linalg.inv(AAT + reg*np.identity(len(A)))), y_train_ohe)
     #print(w.shape)
     print("Predicting")
     y_pred = np.array([np.argmax(np.dot(np.transpose(w), x)) for x in X_feat_train])
