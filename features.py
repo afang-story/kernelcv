@@ -9,7 +9,8 @@ from coatesng import BasicCoatesNgNet
 def ZCA(X):
     sigma = np.cov(X, rowvar=True)
     U, S, V = np.linalg.svd(sigma)
-    epsilon = 0.00001
+    # epsilon = 0.00001
+    epsilon = 0.001 
     ZCAMatrix = np.dot(U, np.dot(np.diag(1.0/np.sqrt(S + epsilon)), U.T))
     return ZCAMatrix
 
@@ -38,7 +39,7 @@ def patchify(img, patch_shape, img_shape):
 def pytorch_features(X, patches, img_shape, patch_shape, block_size, pool_size):
     filters = patches.reshape(len(patches), patch_shape[0], patch_shape[1], patch_shape[2]).transpose(0,3,1,2)
     pool_kernel_size = int(np.ceil((img_shape[0] - patch_shape[0] + 1) / pool_size))
-    net = BasicCoatesNgNet(filters, patch_size=patch_shape[0], in_channels=patch_shape[2], pool_size=pool_kernel_size, pool_stride=pool_kernel_size, bias=1.0, filter_batch_size=128)
+    net = BasicCoatesNgNet(filters, patch_size=patch_shape[0], in_channels=patch_shape[2], pool_size=15, pool_stride=6, bias=1.0, filter_batch_size=128)
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
     lift = None
     b_size = block_size
@@ -71,7 +72,7 @@ def get_features(X_train, X_test, img_shape, n_features, block_size, patch_shape
     whitener = ZCA(patches.T)
     print(whitener.shape)
     # patches_train = np.dot(patches_train.reshape(-1, int(np.prod(patch_shape))), whitener.T).reshape(patches_train.shape)
-    patches_train = np.dot(patches, whitener.T).reshape(patches_train.shape)
+    patches_train = np.dot(np.dot(patches, whitener), whitener.T).reshape(patches_train.shape)
     print(patches_train.shape)
 
     indices = np.random.choice(range(len(patches_train.reshape(-1, int(np.prod(patch_shape))))), n_features, replace=False)

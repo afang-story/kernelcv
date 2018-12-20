@@ -54,8 +54,6 @@ img_shape = X_train[0].shape
 
 X_train = X_train.reshape((len(X_train), -1))
 X_test = X_test.reshape((len(X_test), -1))
-X_train -= np.mean(X_train, axis=0)
-X_test -= np.mean(X_test, axis=0)
 
 X_feat_train, X_feat_test = get_features(X_train, X_test, img_shape, n_features, block, patch_shape, pool_size)
 X_feat_train = np.float64(X_feat_train)
@@ -71,16 +69,14 @@ A = X_feat_train
 #     left += np.outer(A[i], np.transpose(A[i]))
 # left = left + reg*np.identity(A.shape[1])
 # w = np.dot(np.linalg.inv(left), right)
-# regs = [100,110,120,150,200, 300, 500, 700, 1000]
-regs = [50, 52, 54, 56, 58]
+regs = [1, 10, 100, 500, 1000]
 ATA = np.dot(A.T, A)
 b = np.dot(A.T, y_train_ohe)
 # AAT = np.dot(A, A.T)
 for reg in regs:
     print(reg)
-    w = scipy.linalg.solve(ATA + reg*np.identity(A.shape[1]), b)
+    w = scipy.linalg.solve(ATA + reg*np.identity(A.shape[1]), b, sym_pos=True)
     # w = np.dot(np.dot(A.T, np.linalg.inv(AAT + reg*np.identity(len(A)))), y_train_ohe)
-    #print(w.shape)
     print("Predicting")
     y_pred = np.array([np.argmax(np.dot(np.transpose(w), x)) for x in X_feat_train])
     train_acc =[1 if y_pred[i] == y_train[i] else 0 for i in range(len(y_pred))]
@@ -90,5 +86,3 @@ for reg in regs:
     acc =[1 if y_pred[i] == y_test[i] else 0 for i in range(len(y_pred))]
     acc = sum(acc)/len(y_pred)
     print("Test Accuracy is " + str(acc))
-# with open('results.txt', 'a') as f:
-#     f.write('Train Accuracy: ' + str(train_acc) + ' Test Accuracy: ' + str(acc))
