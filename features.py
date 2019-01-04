@@ -10,7 +10,7 @@ def ZCA(X):
     sigma = np.cov(X, rowvar=True)
     U, S, V = np.linalg.svd(sigma)
     # epsilon = 0.00001
-    epsilon = 0.001 
+    epsilon = 0.001
     ZCAMatrix = np.dot(U, np.dot(np.diag(1.0/np.sqrt(S + epsilon)), U.T))
     return ZCAMatrix
 
@@ -76,6 +76,27 @@ def get_features(X_train, X_test, img_shape, n_features, block_size, patch_shape
     print(patches_train.shape)
 
     indices = np.random.choice(range(len(patches_train.reshape(-1, int(np.prod(patch_shape))))), n_features, replace=False)
+    patches_train = patches_train.reshape(-1, int(np.prod(patch_shape)))[indices]
+
+    print('Convolve Patches to Features')
+    b_size = 1024
+    blocks = int(np.ceil(len(patches_train)/b_size))
+    X_lift_train = None
+    for i in range(blocks):
+        print(i)
+        if X_lift_train is None:
+            X_lift_train = pytorch_features(X_train, patches_train[i*b_size:(i+1)*b_size], img_shape, patch_shape, block_size, pool_size)
+            X_lift_test = pytorch_features(X_test, patches_train[i*b_size:(i+1)*b_size], img_shape, patch_shape, block_size, pool_size)
+        else:
+            X_lift_train = np.hstack((X_lift_train, pytorch_features(X_train, patches_train[i*b_size:(i+1)*b_size], img_shape, patch_shape, block_size, pool_size)))
+            X_lift_test = np.hstack((X_lift_test, pytorch_features(X_test, patches_train[i*b_size:(i+1)*b_size], img_shape, patch_shape, block_size, pool_size)))
+    # X_lift_train = pytorch_features(X_train, patches_train, img_shape, patch_shape, block_size, pool_size)
+    print(X_lift_train.shape)
+    # X_lift_test = pytorch_features(X_test, patches_train, img_shape, patch_shape, block_size, pool_size)
+
+    return (X_lift_train.reshape(len(X_train), -1), X_lift_test.reshape(len(X_test), -1))
+
+def get_features_repeat(X_train, X_test, img_shape, n_features, block_size, patch_shape, pool_size, patches_train, indices):
     patches_train = patches_train.reshape(-1, int(np.prod(patch_shape)))[indices]
 
     print('Convolve Patches to Features')
