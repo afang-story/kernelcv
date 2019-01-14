@@ -1,6 +1,7 @@
 import numpy as np, scipy as scp, random
 import torch
 import sys
+import time
 from sklearn.preprocessing import scale
 
 from coatesng import BasicCoatesNgNet
@@ -39,12 +40,16 @@ def patchify(img, patch_shape, img_shape):
 def pytorch_features(X, patches, img_shape, patch_shape, block_size, pool_size):
     filters = patches.reshape(len(patches), patch_shape[0], patch_shape[1], patch_shape[2]).transpose(0,3,1,2)
     pool_kernel_size = int(np.ceil((img_shape[0] - patch_shape[0] + 1) / pool_size))
-    net = BasicCoatesNgNet(filters, patch_size=patch_shape[0], in_channels=patch_shape[2], pool_size=15, pool_stride=6, bias=1.0, filter_batch_size=128)
+    pool_stride = pool_kernel_size
+    fbs = 8
+    net = BasicCoatesNgNet(filters, patch_size=patch_shape[0], in_channels=patch_shape[2], pool_size=pool_kernel_size, pool_stride=pool_stride, bias=1.0, filter_batch_size=fbs)
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
     lift = None
     b_size = block_size
     blocks = int(np.ceil(len(X)/b_size))
+    start = time.time()
     for i in range(blocks):
+        print(i*10)
         if lift is None:
             lift = net(torch.from_numpy(X[i*b_size:(i+1)*b_size].reshape(-1,img_shape[0],img_shape[1],img_shape[2]).transpose(0,3,1,2)).to(device)).cpu().detach().numpy()
         else:
@@ -52,6 +57,7 @@ def pytorch_features(X, patches, img_shape, patch_shape, block_size, pool_size):
         # print(lift.shape)
     # lift = net(torch.from_numpy(X.reshape(len(X), img_shape[2], img_shape[0], img_shape[1])).to(device)).detach().numpy()
     # print(lift.shape)
+    print(time.time()-start)
     return lift
 
 def get_features(X_train, X_test, img_shape, n_features, block_size, patch_shape, pool_size):
