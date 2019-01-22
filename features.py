@@ -41,6 +41,10 @@ def pytorch_features(X, patches, img_shape, patch_shape, block_size, pool_size):
     filters = patches.reshape(len(patches), patch_shape[0], patch_shape[1], patch_shape[2]).transpose(0,3,1,2)
     pool_kernel_size = int(np.ceil((img_shape[0] - patch_shape[0] + 1) / pool_size))
     pool_stride = pool_kernel_size
+    # pool_kernel_size = 141
+    # pool_stride = 55
+    pool_kernel_size = 69
+    pool_stride = 27
     fbs = 8
     net = BasicCoatesNgNet(filters, patch_size=patch_shape[0], in_channels=patch_shape[2], pool_size=pool_kernel_size, pool_stride=pool_stride, bias=1.0, filter_batch_size=fbs)
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")

@@ -8,14 +8,19 @@ import torchvision
 import torchvision.transforms as transforms
 
 from sklearn.preprocessing import OneHotEncoder, scale
+from sklearn.metrics import average_precision_score
 from features import get_features, get_simple_features, get_features_repeat, ZCA, patchify
 from voc_helpers.ptvoc import VOCClassification
 # Parameters
 experiment = 'VOC'
 # reg = 1
-n_features = 1024*16
-block_f = 256
-block_n = 16
+threshold = [.1, .25, .33, .4, .5, .6, .66, .75]
+# n_features = 16*1024
+n_features = 2*256
+# block_f = 256
+# block_n = 16
+block_f = 512
+block_n = 32
 # block_f = 1024
 # block_n = 200
 pool_size = 3
@@ -43,26 +48,31 @@ elif experiment == 'CIFAR10':
     X_test = testset.test_data
     y_test = np.array(testset.test_labels)
 elif experiment == 'VOC':
-    crop = torchvision.transforms.CenterCrop(256)
+    dim = 128
+    # transform = torchvision.transforms.CenterCrop(256)
+    # transform = torchvision.transforms.Resize((256, 256))
+    transform = torchvision.transforms.Compose([torchvision.transforms.Resize(dim), torchvision.transforms.CenterCrop(dim)])
     patch_shape = (6,6,3)
     yr = '2012'
     trainset = VOCClassification(root='./data', image_set='train', year=yr,
-                                        download=True, transform=crop)
+                                        download=True, transform=transform)
     valset = VOCClassification(root='./data', image_set='val', year=yr,
-                                       download=True, transform=crop)
+                                       download=True, transform=transform)
     # testset = VOCClassification(root='./data', image_set='test', year=yr,
     #                                     download=True, transform=crop)
     X_train = trainset.data
     y_train = np.array(trainset.labels)
     X_test = valset.data
     y_test = np.array(valset.labels)
+    y_train_ohe = y_train
+    y_test_ohe = y_test
     # X_train = np.vstack((X_train, X_val))
     # y_train = np.vstack((y_train, y_val))
     # X_test = testset.data
     # y_test = np.array(testset.labels)
     print(len(X_train))
     print(len(X_test))
-    print(y_train)
+    # print(y_train)
 else:
     print("Not supported")
     sys.exit()
@@ -70,9 +80,9 @@ else:
 X_train = X_train / 255.
 X_test = X_test / 255.
 
-enc = OneHotEncoder(sparse=False)
-y_train_ohe = enc.fit_transform(y_train.reshape(-1,1))
-y_test_ohe = enc.fit_transform(y_test.reshape(-1,1))
+# enc = OneHotEncoder(sparse=False)
+# y_train_ohe = enc.fit_transform(y_train.reshape(-1,1))
+# y_test_ohe = enc.fit_transform(y_test.reshape(-1,1))
 
 img_shape = X_train[0].shape
 
@@ -119,7 +129,7 @@ for i in range(its):
     test_XT += np.dot(X_batch_test, X_batch_train.T)
 
 print("Getting Matrix")
-regs = [1, 10, 100, 500, 1000, 10000, 100000]
+regs = [1, 10, 100, 500, 1000, 10000, 100000, 1000000]
 for reg in regs:
     print(reg)
     # w = scipy.linalg.solve(ATA + reg*np.identity(A.shape[1]), b, sym_pos=True)
@@ -127,12 +137,41 @@ for reg in regs:
     w = scipy.linalg.solve(AAT + reg*np.identity(AAT.shape[1]), y_train_ohe, sym_pos=True)
     print("Predicting")
     # y_pred = np.array([np.argmax(np.dot(np.transpose(w), x)) for x in X_feat_train])
-    y_pred = np.array([np.argmax(np.dot(np.transpose(w), x)) for x in AAT])
-    train_acc =[1 if y_pred[i] == y_train[i] else 0 for i in range(len(y_pred))]
-    train_acc = sum(train_acc)/len(y_pred)
-    print("Training Accuracy is " + str(train_acc))
+    # y_pred = np.array([np.argmax(np.dot(np.transpose(w), x)) for x in AAT])
+    # train_acc = [1 if y_pred[i] == y_train[i] else 0 for i in range(len(y_pred))]
+    train_result = np.array([np.dot(np.transpose(w), x) for x in AAT])
+    for t in threshold:
+        inds = np.argwhere(train_result > t)
+        y_pred = np.zeros(y_train.shape)
+        for i in inds:
+            y_pred[i[0], i[1]] = 1
+        for r in range(len(y_pred)):
+            if 1 not in y_pred[r]:
+                y_pred[r][np.argmax(train_result[r])] = 1
+        # train_acc = [1 if np.array_equal(y_pred[i], y_train[i]) else 0 for i in range(len(y_pred))]
+        # train_acc = sum(train_acc)/len(y_pred)
+        train_acc = average_precision_score(y_train, y_pred, average='micro')
+        # train_acc2 = average_precision_score(y_train, y_pred, average='weighted')
+        print("Threshold: " + str(t))
+        print("Training Accuracy is " + str(train_acc))
+        # print("Weighted: " + str(train_acc2))
     # y_pred = np.array([np.argmax(np.dot(np.transpose(w), x)) for x in X_feat_test])
-    y_pred = np.array([np.argmax(np.dot(np.transpose(w), x)) for x in test_XT])
-    acc =[1 if y_pred[i] == y_test[i] else 0 for i in range(len(y_pred))]
-    acc = sum(acc)/len(y_pred)
-    print("Test Accuracy is " + str(acc))
+    # y_pred = np.array([np.argmax(np.dot(np.transpose(w), x)) for x in test_XT])
+    # acc =[1 if y_pred[i] == y_test[i] else 0 for i in range(len(y_pred))]
+    test_result = np.array([np.dot(np.transpose(w), x) for x in test_XT])
+    for t in threshold:
+        inds = np.argwhere(test_result > t)
+        y_pred = np.zeros(y_test.shape)
+        for i in inds:
+            y_pred[i[0], i[1]] = 1
+        for r in range(len(y_pred)):
+            if 1 not in y_pred[r]:
+                y_pred[r][np.argmax(test_result[r])] = 1
+        # acc = [1 if y_test[i][np.argmax(test_result[i])] == 1 else 0 for i in range(len(y_pred))]
+        # acc = [1 if np.array_equal(y_pred[i], y_test[i]) else 0 for i in range(len(y_pred))]
+        # acc = sum(acc)/len(y_pred)
+        acc = average_precision_score(y_test, y_pred, average='micro')
+        # acc2 = average_precision_score(y_test, y_pred, average='weighted')
+        print("Threshold: " + str(t))
+        print("Test Accuracy is " + str(acc))
+        # print("Weighted: " + str(acc2))

@@ -277,11 +277,13 @@ def read_object_labels(root, dataset, set):
         if i == 0:
             for (name, label) in data.items():
                 labels = np.zeros(num_classes)
-                labels[i] = label
+                if label == 1:
+                    labels[i] = label
                 labeled_data[name] = labels
         else:
             for (name, label) in data.items():
-                labeled_data[name][i] = label
+                if label == 1:
+                    labeled_data[name][i] = label
     return labeled_data
 
 
@@ -394,7 +396,7 @@ class VOCClassification(data.Dataset):
         if self.target_transform is not None:
             self.labels = np.array([self.target_transform(i[1]) for i in self.images])
         else :
-            self.labels = np.array([list(i[1].numpy()).index(1) for i in self.images])
+            self.labels = np.array([i[1].numpy() for i in self.images])
     def __getitem__(self, index):
         path, target = self.images[index]
         img = Image.open(os.path.join(self.image_dir, path + '.jpg')).convert('RGB')
