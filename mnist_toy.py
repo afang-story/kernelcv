@@ -14,13 +14,14 @@ from voc_helpers.ptvoc import VOCClassification
 # Parameters
 experiment = 'VOC'
 # reg = 1
-threshold = [.1, .25, .33, .4, .5, .6, .66, .75]
+threshold = [.25, .33, .4, .5, .6, .66, .75, .8]
+# threshold = [0]
 # n_features = 16*1024
-n_features = 2*256
-# block_f = 256
-# block_n = 16
-block_f = 512
-block_n = 32
+n_features = 1024
+block_f = 256 # for 256 x 256 and 6x6
+block_n = 16
+# block_f = 512 # for 128 x 128 and 6x6
+# block_n = 32
 # block_f = 1024
 # block_n = 200
 pool_size = 3
@@ -48,14 +49,17 @@ elif experiment == 'CIFAR10':
     X_test = testset.test_data
     y_test = np.array(testset.test_labels)
 elif experiment == 'VOC':
-    dim = 128
+    dim = 256
     # transform = torchvision.transforms.CenterCrop(256)
     # transform = torchvision.transforms.Resize((256, 256))
     transform = torchvision.transforms.Compose([torchvision.transforms.Resize(dim), torchvision.transforms.CenterCrop(dim)])
-    patch_shape = (6,6,3)
+    patch_shape = (12,12,3)
+    patch_shape2 = (6,6,3)
     yr = '2012'
     trainset = VOCClassification(root='./data', image_set='train', year=yr,
                                         download=True, transform=transform)
+    # flip = torchvision.transforms.Compose([torchvision.transforms.Resize(dim), torchvision.transforms.CenterCrop(dim), torchvision.transforms.RandomHorizontalFlip(1)])
+    # trainsetflip = VOCClassification(root='./data', image_set='train', year=yr, download=True, transform=flip)
     valset = VOCClassification(root='./data', image_set='val', year=yr,
                                        download=True, transform=transform)
     # testset = VOCClassification(root='./data', image_set='test', year=yr,
@@ -64,6 +68,19 @@ elif experiment == 'VOC':
     y_train = np.array(trainset.labels)
     X_test = valset.data
     y_test = np.array(valset.labels)
+    '''
+    X_all = np.vstack((X_train, X_test))
+    y_all = np.vstack((y_train, y_test))
+    sn = len(X_all)
+    indices = np.random.choice(range(sn), int(.8*sn), replace=False)
+    others = np.setdiff1d(range(sn), indices)
+    X_train = X_all[indices]
+    X_test = X_all[others]
+    y_train = y_all[indices]
+    y_test = y_all[others]
+    '''
+    # X_train = np.vstack((X_train, trainsetflip.data))
+    # y_train = np.vstack((y_train, np.array(trainsetflip.labels)))
     y_train_ohe = y_train
     y_test_ohe = y_test
     # X_train = np.vstack((X_train, X_val))
@@ -113,18 +130,33 @@ print('Get Patches')
 X_train_c = X_train.copy()
 X_test_c = X_test.copy()
 patches_train = np.array([patchify(x, patch_shape, img_shape)[np.random.choice((img_shape[0]-patch_shape[0]+1)**2, 100, replace=False)] for x in X_train_c])
+patches_train2 = np.array([patchify(x, patch_shape2, img_shape)[np.random.choice((img_shape[0]-patch_shape2[0]+1)**2, 100, replace=False)] for x in X_train_c])
 
 print("Whiten")
 patches = patches_train.reshape(-1, int(np.prod(patch_shape)))
 whitener = ZCA(patches.T)
 patches_train = np.dot(np.dot(patches, whitener), whitener.T).reshape(patches_train.shape)
 
+patches2 = patches_train2.reshape(-1, int(np.prod(patch_shape2)))
+whitener2 = ZCA(patches2.T)
+patches_train2 = np.dot(np.dot(patches2, whitener2), whitener2.T).reshape(patches_train2.shape)
+
 indices = np.random.choice(range(len(patches_train.reshape(-1, int(np.prod(patch_shape))))), n_features, replace=False)
+indices2 = np.random.choice(range(len(patches_train2.reshape(-1, int(np.prod(patch_shape2))))), n_features, replace=False)
+
 for i in range(its):
     print(i)
     X_batch_train, X_batch_test = get_features_repeat(X_train, X_test, img_shape, block_f, block_n, patch_shape, pool_size, patches_train, indices[i*block_f: (i+1)*block_f])
     X_batch_train = np.float64(X_batch_train)
     X_batch_test = np.float64(X_batch_test)
+    
+    X_batch_train2, X_batch_test2 = get_features_repeat(X_train, X_test, img_shape, block_f, block_n, patch_shape2, pool_size, patches_train2, indices2[i*block_f: (i+1)*block_f])
+    X_batch_train2 = np.float64(X_batch_train2)
+    X_batch_test2 = np.float64(X_batch_test2)
+
+    X_batch_train = np.hstack((X_batch_train, X_batch_train2))
+    X_batch_test = np.hstack((X_batch_test, X_batch_test2))
+
     AAT += np.dot(X_batch_train, X_batch_train.T)
     test_XT += np.dot(X_batch_test, X_batch_train.T)
 
@@ -167,6 +199,12 @@ for reg in regs:
         for r in range(len(y_pred)):
             if 1 not in y_pred[r]:
                 y_pred[r][np.argmax(test_result[r])] = 1
+        # for r in range(len(y_pred)):
+        #     th = t * np.amax(test_result[r])
+        #     for j in range(len(test_result[r])):
+        #         if test_result[r][j] > th:
+        #             y_pred[r][j] = 1
+
         # acc = [1 if y_test[i][np.argmax(test_result[i])] == 1 else 0 for i in range(len(y_pred))]
         # acc = [1 if np.array_equal(y_pred[i], y_test[i]) else 0 for i in range(len(y_pred))]
         # acc = sum(acc)/len(y_pred)
