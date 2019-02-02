@@ -10,7 +10,7 @@ from voc_helpers.ptvoc import VOCClassification
 from sklearn.metrics import average_precision_score
 
 model_name = 'resnet'
-num_epochs = 20
+num_epochs = 40
 batch_size = 8*8
 num_classes = 20
 feature_extract = False
@@ -40,10 +40,6 @@ device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 model_ft = model_ft.to(device)
 
 # Gather the parameters to be optimized/updated in this run. If we are
-#  finetuning we will be updating all parameters. However, if we are
-#  doing feature extract method, we will only update the parameters
-#  that we have just initialized, i.e. the parameters with requires_grad
-#  is True.
 params_to_update = model_ft.parameters()
 print("Params to learn:")
 if feature_extract:
@@ -56,9 +52,16 @@ else:
     for name,param in model_ft.named_parameters():
         if param.requires_grad == True:
             print("\t",name)
+ct = 0
+for name, child in model_ft.named_children():
+    ct += 1
+    if ct < 7:
+        for name2, params in child.named_parameters():
+            params.requires_grad = False
 
 # Observe that all parameters are being optimized
-optimizer_ft = optim.SGD(params_to_update, lr=0.01, momentum=0.9)
+# optimizer_ft = optim.SGD(params_to_update, lr=0.01, momentum=0.9)
+optimizer_ft = optim.Adam(params_to_update, lr=0.001)
 
 # Setup the loss fxn
 # criterion = nn.MultiLabelSoftMarginLoss()
