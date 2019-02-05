@@ -41,8 +41,8 @@ def pytorch_features(X, patches, img_shape, patch_shape, block_size, pool_size):
     filters = patches.reshape(len(patches), patch_shape[0], patch_shape[1], patch_shape[2]).transpose(0,3,1,2)
     pool_kernel_size = int(np.ceil((img_shape[0] - patch_shape[0] + 1) / pool_size))
     pool_stride = pool_kernel_size
-    # pool_kernel_size = 141
-    # pool_stride = 55
+    pool_kernel_size = 149 # 141
+    pool_stride = 51 # 55
     # pool_kernel_size = 75 #59 # 69
     # pool_stride = 25 # 32 # 27
     fbs = 8

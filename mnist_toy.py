@@ -16,8 +16,8 @@ experiment = 'VOC'
 # reg = 1
 threshold = [.25, .33, .4, .5, .6, .66, .75, .8]
 # threshold = [0]
-# n_features = 16*1024
-n_features = 1024
+n_features = 4*1024
+# n_features = 512
 block_f = 256 # for 256 x 256 and 6x6
 block_n = 16
 # block_f = 512 # for 128 x 128 and 6x6
@@ -53,13 +53,13 @@ elif experiment == 'VOC':
     # transform = torchvision.transforms.CenterCrop(256)
     # transform = torchvision.transforms.Resize((256, 256))
     transform = torchvision.transforms.Compose([torchvision.transforms.Resize(dim), torchvision.transforms.CenterCrop(dim)])
-    patch_shape = (12,12,3)
-    patch_shape2 = (6,6,3)
+    patch_shape = (6,6,3)
+    # patch_shape2 = (12,12,3)
     yr = '2012'
     trainset = VOCClassification(root='./data', image_set='train', year=yr,
                                         download=True, transform=transform)
-    # flip = torchvision.transforms.Compose([torchvision.transforms.Resize(dim), torchvision.transforms.CenterCrop(dim), torchvision.transforms.RandomHorizontalFlip(1)])
-    # trainsetflip = VOCClassification(root='./data', image_set='train', year=yr, download=True, transform=flip)
+    flip = torchvision.transforms.Compose([torchvision.transforms.Resize(dim), torchvision.transforms.CenterCrop(dim), torchvision.transforms.RandomHorizontalFlip(1)])
+    trainsetflip = VOCClassification(root='./data', image_set='train', year=yr, download=True, transform=flip)
     valset = VOCClassification(root='./data', image_set='val', year=yr,
                                        download=True, transform=transform)
     # testset = VOCClassification(root='./data', image_set='test', year=yr,
@@ -79,8 +79,8 @@ elif experiment == 'VOC':
     y_train = y_all[indices]
     y_test = y_all[others]
     '''
-    # X_train = np.vstack((X_train, trainsetflip.data))
-    # y_train = np.vstack((y_train, np.array(trainsetflip.labels)))
+    X_train = np.vstack((X_train, trainsetflip.data))
+    y_train = np.vstack((y_train, np.array(trainsetflip.labels)))
     y_train_ohe = y_train
     y_test_ohe = y_test
     # X_train = np.vstack((X_train, X_val))
@@ -130,19 +130,19 @@ print('Get Patches')
 X_train_c = X_train.copy()
 X_test_c = X_test.copy()
 patches_train = np.array([patchify(x, patch_shape, img_shape)[np.random.choice((img_shape[0]-patch_shape[0]+1)**2, 100, replace=False)] for x in X_train_c])
-patches_train2 = np.array([patchify(x, patch_shape2, img_shape)[np.random.choice((img_shape[0]-patch_shape2[0]+1)**2, 100, replace=False)] for x in X_train_c])
+# patches_train2 = np.array([patchify(x, patch_shape2, img_shape)[np.random.choice((img_shape[0]-patch_shape2[0]+1)**2, 100, replace=False)] for x in X_train_c])
 
 print("Whiten")
 patches = patches_train.reshape(-1, int(np.prod(patch_shape)))
 whitener = ZCA(patches.T)
 patches_train = np.dot(np.dot(patches, whitener), whitener.T).reshape(patches_train.shape)
 
-patches2 = patches_train2.reshape(-1, int(np.prod(patch_shape2)))
-whitener2 = ZCA(patches2.T)
-patches_train2 = np.dot(np.dot(patches2, whitener2), whitener2.T).reshape(patches_train2.shape)
+# patches2 = patches_train2.reshape(-1, int(np.prod(patch_shape2)))
+# whitener2 = ZCA(patches2.T)
+# patches_train2 = np.dot(np.dot(patches2, whitener2), whitener2.T).reshape(patches_train2.shape)
 
 indices = np.random.choice(range(len(patches_train.reshape(-1, int(np.prod(patch_shape))))), n_features, replace=False)
-indices2 = np.random.choice(range(len(patches_train2.reshape(-1, int(np.prod(patch_shape2))))), n_features, replace=False)
+# indices2 = np.random.choice(range(len(patches_train2.reshape(-1, int(np.prod(patch_shape2))))), n_features, replace=False)
 
 for i in range(its):
     print(i)
@@ -150,16 +150,17 @@ for i in range(its):
     X_batch_train = np.float64(X_batch_train)
     X_batch_test = np.float64(X_batch_test)
     
-    X_batch_train2, X_batch_test2 = get_features_repeat(X_train, X_test, img_shape, block_f, block_n, patch_shape2, pool_size, patches_train2, indices2[i*block_f: (i+1)*block_f])
-    X_batch_train2 = np.float64(X_batch_train2)
-    X_batch_test2 = np.float64(X_batch_test2)
+    # X_batch_train2, X_batch_test2 = get_features_repeat(X_train, X_test, img_shape, block_f, block_n, patch_shape2, pool_size, patches_train2, indices2[i*block_f: (i+1)*block_f])
+    # X_batch_train2 = np.float64(X_batch_train2)
+    # X_batch_test2 = np.float64(X_batch_test2)
 
-    X_batch_train = np.hstack((X_batch_train, X_batch_train2))
-    X_batch_test = np.hstack((X_batch_test, X_batch_test2))
+    # X_batch_train = np.hstack((X_batch_train, X_batch_train2))
+    # X_batch_test = np.hstack((X_batch_test, X_batch_test2))
 
     AAT += np.dot(X_batch_train, X_batch_train.T)
     test_XT += np.dot(X_batch_test, X_batch_train.T)
-
+save_indices = []
+save_labels = []
 print("Getting Matrix")
 regs = [1, 10, 100, 500, 1000, 10000, 100000, 1000000]
 for reg in regs:
@@ -213,3 +214,7 @@ for reg in regs:
         print("Threshold: " + str(t))
         print("Test Accuracy is " + str(acc))
         # print("Weighted: " + str(acc2))
+        save_indices.append(acc)
+        save_labels.append(y_pred)
+print(np.amax(np.array(save_indices)))
+np.savetxt('patch6_4k_labels.csv', save_labels[np.argmax(np.array(save_indices))], delimiter=',')

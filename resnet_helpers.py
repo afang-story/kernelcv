@@ -8,7 +8,7 @@ import time
 import copy
 from sklearn.metrics import average_precision_score
 
-def train_model(model, dataloaders, criterion, optimizer, device, num_epochs=25, is_inception=False):
+def train_model(model, dataloaders, criterion, optimizer, device, num_epochs=25, threshold=0.5, is_inception=False):
     since = time.time()
 
     val_acc_history = []
@@ -16,7 +16,8 @@ def train_model(model, dataloaders, criterion, optimizer, device, num_epochs=25,
     best_model_wts = copy.deepcopy(model.state_dict())
     best_acc = 0.0
 
-    # scheduler = optim.lr_scheduler.StepLR(optimizer, step_size=20, gamma=0.1)
+    # scheduler = optim.lr_scheduler.StepLR(optimizer, step_size=10, gamma=0.5)
+    scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, patience=3, verbose=True, threshold=1e-4)
     for epoch in range(num_epochs):
         print('Epoch {}/{}'.format(epoch, num_epochs - 1))
         print('-' * 10)
@@ -58,7 +59,6 @@ def train_model(model, dataloaders, criterion, optimizer, device, num_epochs=25,
                         outputs = model(inputs)
                         loss = criterion(outputs, labels)
 
-                    threshold = 0.5
                     preds = torch.where(outputs.detach().cpu() > threshold, torch.tensor(1).cpu(), torch.tensor(0).cpu())
                     # backward + optimize only if in training phase
                     if phase == 'train':
@@ -80,7 +80,7 @@ def train_model(model, dataloaders, criterion, optimizer, device, num_epochs=25,
 
             epoch_loss = running_loss / len(dataloaders[phase].dataset)
             # epoch_acc = running_corrects.double() / len(dataloaders[phase].dataset)
-            epoch_acc = average_precision_score(all_preds, all_labels, average='micro')
+            epoch_acc = average_precision_score(all_labels, all_preds, average='micro')
 
             print('{} Loss: {:.4f} Acc: {:.4f}'.format(phase, epoch_loss, epoch_acc))
 
@@ -89,6 +89,8 @@ def train_model(model, dataloaders, criterion, optimizer, device, num_epochs=25,
                 best_acc = epoch_acc
                 best_model_wts = copy.deepcopy(model.state_dict())
             if phase == 'val':
+                val_loss = epoch_loss
+                scheduler.step(val_loss)
                 val_acc_history.append(epoch_acc)
 
         print()
