@@ -37,7 +37,7 @@ def patchify(img, patch_shape, img_shape):
         print("Channel mismatch")
         sys.exit()
 
-def pytorch_features(X, patches, img_shape, patch_shape, block_size, pool_size):
+def pytorch_features(X, patches, img_shape, patch_shape, block_size, pool_size, mode='train', vis_size=0):
     filters = patches.reshape(len(patches), patch_shape[0], patch_shape[1], patch_shape[2]).transpose(0,3,1,2)
     pool_kernel_size = int(np.ceil((img_shape[0] - patch_shape[0] + 1) / pool_size))
     pool_stride = pool_kernel_size
@@ -45,6 +45,9 @@ def pytorch_features(X, patches, img_shape, patch_shape, block_size, pool_size):
     pool_stride = 51 # 55
     # pool_kernel_size = 75 #59 # 69
     # pool_stride = 25 # 32 # 27
+    if mode=='visualize':
+        pool_kernel_size = int(np.ceil((img_shape[0]-patch_shape[0] + 1) / vis_size))
+        pool_stride = pool_kernel_size
     fbs = 8
     net = BasicCoatesNgNet(filters, patch_size=patch_shape[0], in_channels=patch_shape[2], pool_size=pool_kernel_size, pool_stride=pool_stride, bias=1.0, filter_batch_size=fbs)
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
@@ -106,9 +109,9 @@ def get_features(X_train, X_test, img_shape, n_features, block_size, patch_shape
 
     return (X_lift_train.reshape(len(X_train), -1), X_lift_test.reshape(len(X_test), -1))
 
-def get_features_repeat(X_train, X_test, img_shape, n_features, block_size, patch_shape, pool_size, patches_train, indices):
+def get_features_repeat(X_train, X_test, img_shape, n_features, block_size, patch_shape, pool_size, patches_train, indices, mode='train', vis_size=0):
     patches_train = patches_train.reshape(-1, int(np.prod(patch_shape)))[indices]
-
+    pool_size_test = pool_size
     print('Convolve Patches to Features')
     b_size = 1024
     blocks = int(np.ceil(len(patches_train)/b_size))
@@ -117,12 +120,13 @@ def get_features_repeat(X_train, X_test, img_shape, n_features, block_size, patc
         print(i)
         if X_lift_train is None:
             X_lift_train = pytorch_features(X_train, patches_train[i*b_size:(i+1)*b_size], img_shape, patch_shape, block_size, pool_size)
-            X_lift_test = pytorch_features(X_test, patches_train[i*b_size:(i+1)*b_size], img_shape, patch_shape, block_size, pool_size)
+            X_lift_test = pytorch_features(X_test, patches_train[i*b_size:(i+1)*b_size], img_shape, patch_shape, block_size, pool_size, mode, vis_size)
         else:
             X_lift_train = np.hstack((X_lift_train, pytorch_features(X_train, patches_train[i*b_size:(i+1)*b_size], img_shape, patch_shape, block_size, pool_size)))
-            X_lift_test = np.hstack((X_lift_test, pytorch_features(X_test, patches_train[i*b_size:(i+1)*b_size], img_shape, patch_shape, block_size, pool_size)))
+            X_lift_test = np.hstack((X_lift_test, pytorch_features(X_test, patches_train[i*b_size:(i+1)*b_size], img_shape, patch_shape, block_size, pool_size, mode, vis_size)))
     # X_lift_train = pytorch_features(X_train, patches_train, img_shape, patch_shape, block_size, pool_size)
     print(X_lift_train.shape)
+    print(X_lift_test.shape)
     # X_lift_test = pytorch_features(X_test, patches_train, img_shape, patch_shape, block_size, pool_size)
 
     return (X_lift_train.reshape(len(X_train), -1), X_lift_test.reshape(len(X_test), -1))

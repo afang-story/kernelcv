@@ -10,7 +10,7 @@ from voc_helpers.ptvoc import VOCClassification
 from sklearn.metrics import average_precision_score
 
 model_name = 'resnet'
-num_epochs = 50
+num_epochs = 30
 batch_size = 2*2*2*8*8
 num_classes = 20
 feature_extract = False
@@ -83,6 +83,7 @@ model_ft, hist = train_model(model_ft, dataloaders_dict, criterion, optimizer_ft
 # Save validation labels
 preds = None
 all_labels = None
+all_outputs = None
 model_ft.eval()
 with torch.no_grad():
     for inputs, labels in dataloaders_dict['val']:
@@ -91,9 +92,12 @@ with torch.no_grad():
         if preds is None:
             preds = torch.where(outputs.detach().cpu() > threshold, torch.tensor(1).cpu(), torch.tensor(0).cpu())
             all_labels = labels.data.cpu().numpy()
+            all_outputs = outputs.detach().cpu().numpy()
         else:
             new = torch.where(outputs.detach().cpu() > threshold, torch.tensor(1).cpu(), torch.tensor(0).cpu())
             preds = np.vstack((preds, new))
             all_labels = np.vstack((all_labels, labels.data.cpu().numpy()))
+            all_outputs = np.vstack((all_outputs, outputs.detach().cpu().numpy()))
 print(average_precision_score(all_labels, preds, average='micro'))
-np.savetxt('resnet50_labels.csv', preds, delimiter=',')
+np.savetxt('resnet50_labels7_1_prethresh.csv', all_outputs, delimiter=',')
+np.savetxt('resnet50_labels7_1.csv', preds, delimiter=',')
