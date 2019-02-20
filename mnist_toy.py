@@ -3,6 +3,8 @@ import scipy
 import random
 import sys
 import csv
+import glob
+import cv2
 
 import torch
 import torch.nn as nn
@@ -16,15 +18,15 @@ from skimage.transform import pyramid_gaussian
 from sklearn.preprocessing import OneHotEncoder, scale
 from sklearn.metrics import average_precision_score
 from features import get_features, get_simple_features, get_features_repeat, ZCA, patchify # visualizer
-from voc_helpers.ptvoc import VOCClassification
+from voc_helpers.ptvoc import VOCClassification, VOCDetection
 # Parameters
 experiment = 'VOC'
 # reg = 1
-threshold = [.2, .25, .33, .4, .5, .6, .66, .75, .8]
+# threshold = [.2, .25, .33, .4, .5, .6, .66, .75, .8]
 # threshold = [.3, .5, .7]
-# n_features = 2*1024
-n_features = 512 # 256
-block_f = 128 # for visualize # 256 # for 256 x 256 and 6x6
+# n_features = 8*1024
+n_features = 256
+block_f = 256 # 128 # for visualize # 256 # for 256 x 256 and 6x6
 block_n = 16
 # block_f = 512 # for 128 x 128 and 6x6
 # block_n = 32
@@ -33,8 +35,10 @@ block_n = 16
 pool_size = 3
 oversample = False
 sgd_weights = False
-visualize = True
-save_visualize = True
+visualize = False
+save_visualize = False
+easy_mode = False
+smart_patches = False
 
 if experiment == 'MNIST':
     patch_shape = (6,6)
@@ -60,7 +64,6 @@ elif experiment == 'CIFAR10':
     y_test = np.array(testset.test_labels)
 elif experiment == 'VOC':
     dim = 256
-    # transform = torchvision.transforms.CenterCrop(dim)
     transform = torchvision.transforms.Resize((dim, dim))
     # transform = torchvision.transforms.Compose([torchvision.transforms.Resize(dim), torchvision.transforms.CenterCrop(dim)])
     patch_shape = (6,6,3)
@@ -72,34 +75,27 @@ elif experiment == 'VOC':
     # trainsetflip = VOCClassification(root='./data', image_set='train', year=yr, download=True, transform=flip)
     valset = VOCClassification(root='./data', image_set='val', year=yr,
                                        download=True, transform=transform)
-    # testset = VOCClassification(root='./data', image_set='test', year=yr,
-    #                                     download=True, transform=crop)
     X_train = trainset.data
     y_train = np.array(trainset.labels)
     X_test = valset.data
     y_test = np.array(valset.labels)
-    '''
-    X_all = np.vstack((X_train, X_test))
-    y_all = np.vstack((y_train, y_test))
-    sn = len(X_all)
-    indices = np.random.choice(range(sn), int(.8*sn), replace=False)
-    others = np.setdiff1d(range(sn), indices)
-    X_train = X_all[indices]
-    X_test = X_all[others]
-    y_train = y_all[indices]
-    y_test = y_all[others]
-    '''
     # X_train = np.vstack((X_train, trainsetflip.data))
     # y_train = np.vstack((y_train, np.array(trainsetflip.labels)))
     y_train_ohe = y_train
     y_test_ohe = y_test
-    # X_train = np.vstack((X_train, X_val))
-    # y_train = np.vstack((y_train, y_val))
-    # X_test = testset.data
-    # y_test = np.array(testset.labels)
+    if easy_mode:
+        X_train = []
+        X_test = []
+        for t in trainset.images:
+            np_name = 'easy_pascal/train/' + t[0] + '.npy'
+            X_train.append(cv2.resize(np.load(np_name), (dim, dim)))
+        for t in valset.images:
+            np_name = 'easy_pascal/val/' + t[0] + '.npy'
+            X_test.append(cv2.resize(np.load(np_name), (dim, dim)))
+        X_train = np.array(X_train)
+        X_test = np.array(X_test)
     print(len(X_train))
     print(len(X_test))
-    # print(y_train)
 else:
     print("Not supported")
     sys.exit()
@@ -169,6 +165,7 @@ if len(patch_shape) == 2:
 if len(img_shape) == 2:
     img_shape = np.r_[img_shape, 1]
 
+patches_train = None
 for d in range(levels+1):
     X_train = train_sets[d]
     X_test = test_sets[d]
@@ -176,23 +173,43 @@ for d in range(levels+1):
     X_train = X_train.reshape((len(X_train), -1))
     X_test = X_test.reshape((len(X_test), -1))
     print('Get Patches')
-    X_train_c = X_train.copy()
-    X_test_c = X_test.copy()
-    patches_train = np.array([patchify(x, patch_shape, img_shape)[np.random.choice((img_shape[0]-patch_shape[0]+1)**2, 100, replace=False)] for x in X_train_c])
-    # patches_train2 = np.array([patchify(x, patch_shape2, img_shape)[np.random.choice((img_shape[0]-patch_shape2[0]+1)**2, 100, replace=False)] for x in X_train_c])
+    if smart_patches:
+        bounded = []
+        for np_name in glob.glob('bound_images/scaled_train/*.np[yz]'):
+            bounded.append(np.load(np_name)/255.)
+        patches_train = np.array([patchify(np.ndarray.flatten(bounded[x]), patch_shape, bounded[x].shape)[np.random.choice((bounded[x].shape[0]-patch_shape[0]+1)*(bounded[x].shape[1]-patch_shape[1]+1), 50, replace=True)] for x in range(len(bounded)) if bounded[x].shape[0] >= patch_shape[0] and bounded[x].shape[1] >= patch_shape[1]])
+        print(patches_train.shape)
+    else:
+        X_train_c = X_train.copy()
+        X_test_c = X_test.copy()
+        new_patches = np.array([patchify(x, patch_shape, img_shape)[np.random.choice((img_shape[0]-patch_shape[0]+1)**2, 100, replace=False)] for x in X_train_c])
+        if patches_train is None:
+            patches_train = new_patches
+            # patches_train2 = np.array([patchify(x, patch_shape2, img_shape)[np.random.choice((img_shape[0]-patch_shape2[0]+1)**2, 100, replace=False)] for x in X_train_c])
+        else:
+            patches_train = np.vstack((patches_train, new_patches))
 
-    print("Whiten")
-    patches = patches_train.reshape(-1, int(np.prod(patch_shape)))
-    whitener = ZCA(patches.T)
-    patches_train = np.dot(np.dot(patches, whitener), whitener.T).reshape(patches_train.shape)
+print("Whiten")
+patches = patches_train.reshape(-1, int(np.prod(patch_shape)))
+# patches = np.array([p for p in patches if len(np.nonzero(p)[0])/len(p) >= 0.9])
+print(patches.shape)
+whitener = ZCA(patches.T)
+# patches_train = np.dot(np.dot(patches, whitener), whitener.T).reshape(patches_train.shape)
+patches_train = np.dot(np.dot(patches, whitener), whitener.T).reshape(patches.shape)
+    
+# patches2 = patches_train2.reshape(-1, int(np.prod(patch_shape2)))
+# whitener2 = ZCA(patches2.T)
+# patches_train2 = np.dot(np.dot(patches2, whitener2), whitener2.T).reshape(patches_train2.shape)
 
-    # patches2 = patches_train2.reshape(-1, int(np.prod(patch_shape2)))
-    # whitener2 = ZCA(patches2.T)
-    # patches_train2 = np.dot(np.dot(patches2, whitener2), whitener2.T).reshape(patches_train2.shape)
+indices = np.random.choice(range(len(patches_train.reshape(-1, int(np.prod(patch_shape))))), n_features, replace=False)
+# indices2 = np.random.choice(range(len(patches_train2.reshape(-1, int(np.prod(patch_shape2))))), n_features, replace=False)
 
-    indices = np.random.choice(range(len(patches_train.reshape(-1, int(np.prod(patch_shape))))), n_features, replace=False)
-    # indices2 = np.random.choice(range(len(patches_train2.reshape(-1, int(np.prod(patch_shape2))))), n_features, replace=False)
-
+for d in range(levels+1):
+    X_train = train_sets[d]
+    X_test = test_sets[d]
+    img_shape = X_train[0].shape
+    X_train = X_train.reshape((len(X_train), -1))
+    X_test = X_test.reshape((len(X_test), -1))
     for i in range(its):
         print(i)
         X_batch_train, X_batch_test = get_features_repeat(X_train, X_test, img_shape, block_f, block_n, patch_shape, pool_size, patches_train, indices[i*block_f: (i+1)*block_f])
@@ -218,7 +235,7 @@ save_indices = []
 save_labels = []
 save_prethresh = []
 ws = []
-thresh_used = []
+# thresh_used = []
 print("Getting Matrix")
 # regs = [1, 10, 100, 500, 1000, 10000, 100000, 1000000]
 regs = [1, 10, 100, 500, 1000]
@@ -265,6 +282,7 @@ for reg in regs:
     else:
         train_result = np.array([np.dot(np.transpose(w), x) for x in AAT])
     # train_result = softmax(train_result, axis=1)
+    '''
     for t in threshold:
         inds = np.argwhere(train_result > t)
         y_pred = np.zeros(y_train.shape)
@@ -280,6 +298,9 @@ for reg in regs:
         print("Threshold: " + str(t))
         print("Training Accuracy is " + str(train_acc))
         # print("Weighted: " + str(train_acc2))
+    '''
+    train_acc = average_precision_score(y_train, train_result, average='micro')
+    print("Training Accuracy is " + str(train_acc))
     # y_pred = np.array([np.argmax(np.dot(np.transpose(w), x)) for x in X_feat_test])
     # y_pred = np.array([np.argmax(np.dot(np.transpose(w), x)) for x in test_XT])
     # acc =[1 if y_pred[i] == y_test[i] else 0 for i in range(len(y_pred))]
@@ -288,6 +309,7 @@ for reg in regs:
     else:
         test_result = np.array([np.dot(np.transpose(w), x) for x in test_XT])
     # test_result = softmax(test_result, axis=1)
+    '''
     for t in threshold:
         inds = np.argwhere(test_result > t)
         y_pred = np.zeros(y_test.shape)
@@ -315,6 +337,12 @@ for reg in regs:
         save_prethresh.append(test_result)
         ws.append(w)
         thresh_used.append(t)
+    '''
+    acc = average_precision_score(y_test, test_result, average='micro')
+    print("Test Accuracy is " + str(acc))
+    save_indices.append(acc)
+    save_prethresh.append(test_result)
+    ws.append(w)
 print(np.amax(np.array(save_indices)))
 AAT = None
 test_XT = None
@@ -390,6 +418,5 @@ if visualize:
             fname2 = 'visualmax/' + img_labels[x]
             np.save(fname2, np.amax(test_lift[x], axis=0))
 print("Achieved best val acc: " + str(np.amax(np.array(save_indices))))
-print("Used threshold value: " + str(thresh_used[np.argmax(np.array(save_indices))]))
 # np.savetxt('patch6_256_labels_pyramid_prethresh.csv', save_prethresh[np.argmax(np.array(save_indices))], delimiter=',')
 # np.savetxt('patch6_256_labels_pyramid.csv', save_labels[np.argmax(np.array(save_indices))], delimiter=',')
