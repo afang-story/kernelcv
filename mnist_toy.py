@@ -19,17 +19,18 @@ from sklearn.preprocessing import OneHotEncoder, scale
 from sklearn.metrics import average_precision_score
 from features import get_features, get_simple_features, get_features_repeat, ZCA, patchify # visualizer
 from voc_helpers.ptvoc import VOCClassification, VOCDetection
+from average_precision.python.ap import compute_multiple_aps
 # Parameters
 experiment = 'VOC'
 # reg = 1
 # threshold = [.2, .25, .33, .4, .5, .6, .66, .75, .8]
 # threshold = [.3, .5, .7]
 # n_features = 8*1024
-n_features = 256
-block_f = 256 # 128 # for visualize # 256 # for 256 x 256 and 6x6
-block_n = 16
-# block_f = 512 # for 128 x 128 and 6x6
-# block_n = 32
+n_features = 2*256
+# block_f = 256 # 128 # for visualize # 256 # for 256 x 256 and 6x6
+# block_n = 16
+block_f = 512 # for 128 x 128 and 6x6
+block_n = 32
 # block_f = 1024
 # block_n = 200
 pool_size = 3
@@ -63,7 +64,7 @@ elif experiment == 'CIFAR10':
     X_test = testset.test_data
     y_test = np.array(testset.test_labels)
 elif experiment == 'VOC':
-    dim = 256
+    dim = 128 # 256
     transform = torchvision.transforms.Resize((dim, dim))
     # transform = torchvision.transforms.Compose([torchvision.transforms.Resize(dim), torchvision.transforms.CenterCrop(dim)])
     patch_shape = (6,6,3)
@@ -71,16 +72,16 @@ elif experiment == 'VOC':
     yr = '2012'
     trainset = VOCClassification(root='./data', image_set='train', year=yr,
                                         download=True, transform=transform)
-    # flip = torchvision.transforms.Compose([transform, torchvision.transforms.RandomHorizontalFlip(1)])
-    # trainsetflip = VOCClassification(root='./data', image_set='train', year=yr, download=True, transform=flip)
+    flip = torchvision.transforms.Compose([transform, torchvision.transforms.RandomHorizontalFlip(1)])
+    trainsetflip = VOCClassification(root='./data', image_set='train', year=yr, download=True, transform=flip)
     valset = VOCClassification(root='./data', image_set='val', year=yr,
                                        download=True, transform=transform)
     X_train = trainset.data
     y_train = np.array(trainset.labels)
     X_test = valset.data
     y_test = np.array(valset.labels)
-    # X_train = np.vstack((X_train, trainsetflip.data))
-    # y_train = np.vstack((y_train, np.array(trainsetflip.labels)))
+    X_train = np.vstack((X_train, trainsetflip.data))
+    y_train = np.vstack((y_train, np.array(trainsetflip.labels)))
     y_train_ohe = y_train
     y_test_ohe = y_test
     if easy_mode:
@@ -237,8 +238,8 @@ save_prethresh = []
 ws = []
 # thresh_used = []
 print("Getting Matrix")
-# regs = [1, 10, 100, 500, 1000, 10000, 100000, 1000000]
-regs = [1, 10, 100, 500, 1000]
+regs = [1, 10, 100, 500, 1000, 10000, 100000, 1000000]
+# regs = [1, 10, 100, 500, 1000]
 for reg in regs:
     print(reg)
     # w = scipy.linalg.solve(ATA + reg*np.identity(A.shape[1]), b, sym_pos=True)
@@ -278,9 +279,8 @@ for reg in regs:
     # y_pred = np.array([np.argmax(np.dot(np.transpose(w), x)) for x in AAT])
     # train_acc = [1 if y_pred[i] == y_train[i] else 0 for i in range(len(y_pred))]
     if sgd_weights:
-        train_result = np.array([np.dot(x, true_w) for x in train_lift])
-    else:
-        train_result = np.array([np.dot(np.transpose(w), x) for x in AAT])
+        sgd_train_result = np.array([np.dot(x, true_w) for x in train_lift])
+    train_result = np.array([np.dot(np.transpose(w), x) for x in AAT])
     # train_result = softmax(train_result, axis=1)
     '''
     for t in threshold:
@@ -299,15 +299,17 @@ for reg in regs:
         print("Training Accuracy is " + str(train_acc))
         # print("Weighted: " + str(train_acc2))
     '''
-    train_acc = average_precision_score(y_train, train_result, average='micro')
+    if sgd_weights:
+        sgd_train_acc = np.mean(compute_multiple_aps(y_train, sgd_train_result))
+        print("SGD Train Acc is " + str(sgd_train_acc))
+    train_acc = np.mean(compute_multiple_aps(y_train, train_result))
     print("Training Accuracy is " + str(train_acc))
     # y_pred = np.array([np.argmax(np.dot(np.transpose(w), x)) for x in X_feat_test])
     # y_pred = np.array([np.argmax(np.dot(np.transpose(w), x)) for x in test_XT])
     # acc =[1 if y_pred[i] == y_test[i] else 0 for i in range(len(y_pred))]
     if sgd_weights:
-        test_result = np.array([np.dot(x, true_w) for x in test_lift])
-    else:
-        test_result = np.array([np.dot(np.transpose(w), x) for x in test_XT])
+        sgd_test_result = np.array([np.dot(x, true_w) for x in test_lift])
+    test_result = np.array([np.dot(np.transpose(w), x) for x in test_XT])
     # test_result = softmax(test_result, axis=1)
     '''
     for t in threshold:
@@ -338,8 +340,12 @@ for reg in regs:
         ws.append(w)
         thresh_used.append(t)
     '''
-    acc = average_precision_score(y_test, test_result, average='micro')
+    if sgd_weights:
+        sgd_acc = np.mean(compute_multiple_aps(y_test, sgd_test_result))
+        print("SGD Test Acc is " + str(sgd_acc))
+    acc = np.mean(compute_multiple_aps(y_test, test_result))
     print("Test Accuracy is " + str(acc))
+    print(compute_multiple_aps(y_test, test_result))
     save_indices.append(acc)
     save_prethresh.append(test_result)
     ws.append(w)

@@ -26,7 +26,7 @@ def patchify(img, patch_shape, img_shape):
         strides = img.itemsize * np.array([Y, 1, Y, 1])
         patches = np.lib.stride_tricks.as_strided(img, shape=shape, strides=strides)
         return patches.reshape((patches.shape[0] * patches.shape[1], patch_shape[0], patch_shape[1]))
-    elif patch_shape[2] == 3:
+    elif len(patch_shape) == 3:
         X, Y, Z = img_shape[0], img_shape[1], img_shape[2]
         x, y, z = patch_shape[0], patch_shape[1], img_shape[2]
         strides = img.itemsize * np.array([Y*Z, Z, 1, Y*Z, Z, 1])
