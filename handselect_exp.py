@@ -61,9 +61,13 @@ test_lift = None
 print("Get Patch")
 # Get patch from image, find way to normalize - probably just take patch from data after centering and making unit variance, or whiten etc.
 # maybe normalize all data initially
-patches_train = np.zeros(40,40,3) # load image here
+pname = 'patches/aeroplane/2008_000021_3.png'
+patches_train = np.array(cv2.imread(pname))/255. # load image here
+pdim = min(len(patches_train), len(patches_train[0]))
+patches_train = cv2.resize(patches_train, (pdim, pdim))
 patch_shape = patch.shape
-indices = range(1)
+patches_train = np.array([patches_train])
+indices = range(len(patches_train))
 print("Convolve")
 X_batch_train, X_batch_test = get_features_repeat(X_train, X_test, img_shape, block_f, block_n, patch_shape, pool_size, patches_train, indices)
 
