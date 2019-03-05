@@ -21,18 +21,18 @@ from features import get_features, get_simple_features, get_features_repeat, ZCA
 from voc_helpers.ptvoc import VOCClassification, VOCDetection
 from average_precision.python.ap import compute_multiple_aps
 # Parameters
-experiment = 'VOC'
+experiment = 'CIFAR10'
 # reg = 1
 # threshold = [.2, .25, .33, .4, .5, .6, .66, .75, .8]
 # threshold = [.3, .5, .7]
-# n_features = 8*1024
-n_features = 2*256
+n_features = 32*1024
+# n_features = 2*256
 # block_f = 256 # 128 # for visualize # 256 # for 256 x 256 and 6x6
 # block_n = 16
-block_f = 512 # for 128 x 128 and 6x6
-block_n = 32
-# block_f = 1024
-# block_n = 200
+# block_f = 512 # for 128 x 128 and 6x6
+# block_n = 32
+block_f = 1024
+block_n = 250
 pool_size = 3
 oversample = False
 sgd_weights = False
@@ -52,6 +52,9 @@ if experiment == 'MNIST':
     y_train = trainset.train_labels.cpu().detach().numpy()
     X_test = testset.test_data.cpu().detach().numpy()
     y_test = testset.test_labels.cpu().detach().numpy()
+    enc = OneHotEncoder(sparse=False)
+    y_train_ohe = enc.fit_transform(y_train.reshape(-1,1))
+    y_test_ohe = enc.fit_transform(y_test.reshape(-1,1))
 elif experiment == 'CIFAR10':
     patch_shape = (6,6,3)
 
@@ -63,8 +66,11 @@ elif experiment == 'CIFAR10':
     y_train = np.array(trainset.train_labels)
     X_test = testset.test_data
     y_test = np.array(testset.test_labels)
+    enc = OneHotEncoder(sparse=False)
+    y_train_ohe = enc.fit_transform(y_train.reshape(-1,1))
+    y_test_ohe = enc.fit_transform(y_test.reshape(-1,1))
 elif experiment == 'VOC':
-    dim = 128 # 256
+    dim = 256
     transform = torchvision.transforms.Resize((dim, dim))
     # transform = torchvision.transforms.Compose([torchvision.transforms.Resize(dim), torchvision.transforms.CenterCrop(dim)])
     patch_shape = (6,6,3)
@@ -72,16 +78,16 @@ elif experiment == 'VOC':
     yr = '2012'
     trainset = VOCClassification(root='./data', image_set='train', year=yr,
                                         download=True, transform=transform)
-    flip = torchvision.transforms.Compose([transform, torchvision.transforms.RandomHorizontalFlip(1)])
-    trainsetflip = VOCClassification(root='./data', image_set='train', year=yr, download=True, transform=flip)
+    # flip = torchvision.transforms.Compose([transform, torchvision.transforms.RandomHorizontalFlip(1)])
+    # trainsetflip = VOCClassification(root='./data', image_set='train', year=yr, download=True, transform=flip)
     valset = VOCClassification(root='./data', image_set='val', year=yr,
                                        download=True, transform=transform)
     X_train = trainset.data
     y_train = np.array(trainset.labels)
     X_test = valset.data
     y_test = np.array(valset.labels)
-    X_train = np.vstack((X_train, trainsetflip.data))
-    y_train = np.vstack((y_train, np.array(trainsetflip.labels)))
+    # X_train = np.vstack((X_train, trainsetflip.data))
+    # y_train = np.vstack((y_train, np.array(trainsetflip.labels)))
     y_train_ohe = y_train
     y_test_ohe = y_test
     if easy_mode:
@@ -104,9 +110,6 @@ else:
 X_train = X_train / 255.
 X_test = X_test / 255.
 
-# enc = OneHotEncoder(sparse=False)
-# y_train_ohe = enc.fit_transform(y_train.reshape(-1,1))
-# y_test_ohe = enc.fit_transform(y_test.reshape(-1,1))
 levels = 0
 # pyramids_train = [tuple(pyramid_gaussian(image, max_layer=levels, downscale=2, multichannel=True)) for image in X_train]
 # pyramids_test = [tuple(pyramid_gaussian(image, max_layer=levels, downscale=2, multichannel=True)) for image in X_test]
@@ -165,7 +168,7 @@ if len(patch_shape) == 2:
     patch_shape = np.r_[patch_shape, 1]
 if len(img_shape) == 2:
     img_shape = np.r_[img_shape, 1]
-
+'''
 patches_train = None
 for d in range(levels+1):
     X_train = train_sets[d]
@@ -204,6 +207,9 @@ patches_train = np.dot(np.dot(patches, whitener), whitener.T).reshape(patches.sh
 
 indices = np.random.choice(range(len(patches_train.reshape(-1, int(np.prod(patch_shape))))), n_features, replace=False)
 # indices2 = np.random.choice(range(len(patches_train2.reshape(-1, int(np.prod(patch_shape2))))), n_features, replace=False)
+'''
+patches_train = np.random.randn(40000, int(np.prod(patch_shape)))
+indices = np.random.choice(range(len(patches_train)), n_features, replace=False)
 
 for d in range(levels+1):
     X_train = train_sets[d]
@@ -232,14 +238,19 @@ for d in range(levels+1):
                 test_lift = np.hstack((test_lift, X_batch_test))
         AAT += np.dot(X_batch_train, X_batch_train.T)
         test_XT += np.dot(X_batch_test, X_batch_train.T)
+
 save_indices = []
 save_labels = []
 save_prethresh = []
 ws = []
+#AAT = np.load('cifar_32k_XXT_mod.npy')
+#test_XT = np.load('cifar_32k_test_XT_mod.npy')
+np.save('cifar_32k_XXT_nobias', AAT)
+np.save('cifar_32k_test_XT_nobias', test_XT)
 # thresh_used = []
 print("Getting Matrix")
-regs = [1, 10, 100, 500, 1000, 10000, 100000, 1000000]
-# regs = [1, 10, 100, 500, 1000]
+regs = [1, 10, 50, 100, 500, 1000, 10000, 100000]
+# regs = [40, 45, 55, 60]
 for reg in regs:
     print(reg)
     # w = scipy.linalg.solve(ATA + reg*np.identity(A.shape[1]), b, sym_pos=True)
@@ -302,7 +313,11 @@ for reg in regs:
     if sgd_weights:
         sgd_train_acc = np.mean(compute_multiple_aps(y_train, sgd_train_result))
         print("SGD Train Acc is " + str(sgd_train_acc))
-    train_acc = np.mean(compute_multiple_aps(y_train, train_result))
+    if experiment == 'VOC':
+        train_acc = np.mean(compute_multiple_aps(y_train, train_result))
+    else:
+        train_acc = [1 if np.argmax(train_result[i]) == y_train[i] else 0 for i in range(len(train_result))]
+        train_acc = sum(train_acc)/len(train_result)
     print("Training Accuracy is " + str(train_acc))
     # y_pred = np.array([np.argmax(np.dot(np.transpose(w), x)) for x in X_feat_test])
     # y_pred = np.array([np.argmax(np.dot(np.transpose(w), x)) for x in test_XT])
@@ -343,9 +358,13 @@ for reg in regs:
     if sgd_weights:
         sgd_acc = np.mean(compute_multiple_aps(y_test, sgd_test_result))
         print("SGD Test Acc is " + str(sgd_acc))
-    acc = np.mean(compute_multiple_aps(y_test, test_result))
+    if experiment == 'VOC':
+        acc = np.mean(compute_multiple_aps(y_test, test_result))
+        print(compute_multiple_aps(y_test, test_result))
+    else:
+        acc = [1 if np.argmax(test_result[i]) == y_test[i] else 0 for i in range(len(test_result))]
+        acc = sum(acc)/len(test_result)
     print("Test Accuracy is " + str(acc))
-    print(compute_multiple_aps(y_test, test_result))
     save_indices.append(acc)
     save_prethresh.append(test_result)
     ws.append(w)
