@@ -25,8 +25,8 @@ experiment = 'CIFAR10'
 # reg = 1
 # threshold = [.2, .25, .33, .4, .5, .6, .66, .75, .8]
 # threshold = [.3, .5, .7]
-n_features = 32*1024
-# n_features = 2*256
+# n_features = 32*1024
+n_features = 4*4*256
 # block_f = 256 # 128 # for visualize # 256 # for 256 x 256 and 6x6
 # block_n = 16
 # block_f = 512 # for 128 x 128 and 6x6
@@ -40,7 +40,7 @@ visualize = False
 save_visualize = False
 easy_mode = False
 smart_patches = False
-
+gaussian_kernel = True
 if experiment == 'MNIST':
     patch_shape = (6,6)
 
@@ -163,6 +163,8 @@ test_XT = np.zeros((numTest, numTrain), dtype='float64')
 its = int(n_features / block_f)
 train_lift = None
 test_lift = None
+rownormtrainsq = None
+rownormtestsq = None
 
 if len(patch_shape) == 2:
     patch_shape = np.r_[patch_shape, 1]
@@ -236,6 +238,13 @@ for d in range(levels+1):
             else:
                 train_lift = np.hstack((train_lift, X_batch_train))
                 test_lift = np.hstack((test_lift, X_batch_test))
+        if gaussian_kernel:
+            if rownormtrainsq is None:
+                rownormtrainsq = np.linalg.norm(X_batch_train, axis=1)**2
+                rownormtestsq = np.linalg.norm(X_batch_test, axis=1)**2
+            else:
+                rownormtrainsq += np.linalg.norm(X_batch_train, axis=1)**2
+                rownormtestsq += np.linalg.norm(X_batch_test, axis=1)**2
         AAT += np.dot(X_batch_train, X_batch_train.T)
         test_XT += np.dot(X_batch_test, X_batch_train.T)
 
@@ -245,8 +254,11 @@ save_prethresh = []
 ws = []
 #AAT = np.load('cifar_32k_XXT_mod.npy')
 #test_XT = np.load('cifar_32k_test_XT_mod.npy')
-np.save('cifar_32k_XXT_nobias', AAT)
-np.save('cifar_32k_test_XT_nobias', test_XT)
+#np.save('cifar_32k_XXT_nobias_mod', AAT)
+#np.save('cifar_32k_test_XT_nobias_mod', test_XT)
+if gaussian_kernel:
+    np.save('cifar_32k_rownormtrainsq_nobias_mod', rownormtrainsq)
+    np.save('cifar_32k_rownormtestsq_nobias_mod', rownormtestsq)
 # thresh_used = []
 print("Getting Matrix")
 regs = [1, 10, 50, 100, 500, 1000, 10000, 100000]
@@ -255,7 +267,12 @@ for reg in regs:
     print(reg)
     # w = scipy.linalg.solve(ATA + reg*np.identity(A.shape[1]), b, sym_pos=True)
     # w = np.dot(np.dot(A.T, np.linalg.inv(AAT + reg*np.identity(len(A)))), y_train_ohe)
-    w = scipy.linalg.solve(AAT + reg*np.identity(AAT.shape[1]), y_train_ohe, sym_pos=True)
+    if gaussian_kernel:
+        sigma = 1
+        K = np.exp(-((rownormtrainsq).T + (-2*AAT + rownormtrainsq).T).T/(2*sigma**2))
+    else:
+        K = AAT
+    w = scipy.linalg.solve(K + reg*np.identity(K.shape[1]), y_train_ohe, sym_pos=True)
     if sgd_weights:
         true_w = np.dot(train_lift.T, w)
         device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
@@ -291,7 +308,7 @@ for reg in regs:
     # train_acc = [1 if y_pred[i] == y_train[i] else 0 for i in range(len(y_pred))]
     if sgd_weights:
         sgd_train_result = np.array([np.dot(x, true_w) for x in train_lift])
-    train_result = np.array([np.dot(np.transpose(w), x) for x in AAT])
+    train_result = np.array([np.dot(np.transpose(w), x) for x in K])
     # train_result = softmax(train_result, axis=1)
     '''
     for t in threshold:
@@ -324,7 +341,11 @@ for reg in regs:
     # acc =[1 if y_pred[i] == y_test[i] else 0 for i in range(len(y_pred))]
     if sgd_weights:
         sgd_test_result = np.array([np.dot(x, true_w) for x in test_lift])
-    test_result = np.array([np.dot(np.transpose(w), x) for x in test_XT])
+    if gaussian_kernel:
+        K = np.exp(-((rownormtestsq).T + (-2*test_XT + rownormtrainsq).T).T/(2*sigma**2))
+    else:
+        K = test_XT
+    test_result = np.array([np.dot(np.transpose(w), x) for x in K])
     # test_result = softmax(test_result, axis=1)
     '''
     for t in threshold:
