@@ -13,7 +13,6 @@ import torch.optim as optim
 import torchvision
 import torchvision.transforms as transforms
 
-from scipy.special import softmax
 from skimage.transform import pyramid_gaussian
 from sklearn.preprocessing import OneHotEncoder, scale
 from sklearn.metrics import average_precision_score
@@ -25,22 +24,23 @@ experiment = 'CIFAR10'
 # reg = 1
 # threshold = [.2, .25, .33, .4, .5, .6, .66, .75, .8]
 # threshold = [.3, .5, .7]
-# n_features = 32*1024
-n_features = 4*4*256
+n_features = 32*1024
+# n_features = 4*4*256
 # block_f = 256 # 128 # for visualize # 256 # for 256 x 256 and 6x6
 # block_n = 16
 # block_f = 512 # for 128 x 128 and 6x6
 # block_n = 32
 block_f = 1024
-block_n = 250
+block_n = 256
 pool_size = 3
+subset = 1024
 oversample = False
 sgd_weights = False
 visualize = False
 save_visualize = False
 easy_mode = False
 smart_patches = False
-gaussian_kernel = True
+gaussian_kernel = False
 if experiment == 'MNIST':
     patch_shape = (6,6)
 
@@ -62,8 +62,8 @@ elif experiment == 'CIFAR10':
                                         download=True, transform=None)
     testset = torchvision.datasets.CIFAR10(root='./data', train=False,
                                        download=True, transform=None)
-    X_train = trainset.train_data
-    y_train = np.array(trainset.train_labels)
+    X_train = trainset.train_data[:subset]
+    y_train = np.array(trainset.train_labels)[:subset]
     X_test = testset.test_data
     y_test = np.array(testset.test_labels)
     enc = OneHotEncoder(sparse=False)
@@ -256,6 +256,8 @@ ws = []
 #test_XT = np.load('cifar_32k_test_XT_mod.npy')
 #np.save('cifar_32k_XXT_nobias_mod', AAT)
 #np.save('cifar_32k_test_XT_nobias_mod', test_XT)
+np.save('cifar_32k_1024data_XXT_nobias', AAT)
+np.save('cifar_32k_1024data_test_XT_nobias', test_XT)
 if gaussian_kernel:
     np.save('cifar_32k_rownormtrainsq_nobias_mod', rownormtrainsq)
     np.save('cifar_32k_rownormtestsq_nobias_mod', rownormtestsq)
@@ -309,7 +311,6 @@ for reg in regs:
     if sgd_weights:
         sgd_train_result = np.array([np.dot(x, true_w) for x in train_lift])
     train_result = np.array([np.dot(np.transpose(w), x) for x in K])
-    # train_result = softmax(train_result, axis=1)
     '''
     for t in threshold:
         inds = np.argwhere(train_result > t)
@@ -346,7 +347,6 @@ for reg in regs:
     else:
         K = test_XT
     test_result = np.array([np.dot(np.transpose(w), x) for x in K])
-    # test_result = softmax(test_result, axis=1)
     '''
     for t in threshold:
         inds = np.argwhere(test_result > t)

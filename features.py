@@ -39,8 +39,8 @@ def patchify(img, patch_shape, img_shape):
 
 def pytorch_features(X, patches, img_shape, patch_shape, block_size, pool_size, mode='train', vis_size=0):
     filters = patches.reshape(len(patches), patch_shape[0], patch_shape[1], patch_shape[2]).transpose(0,3,1,2)
-    pool_kernel_size = 15 # int(np.ceil((img_shape[0] - patch_shape[0] + 1) / pool_size))
-    pool_stride = 6 # pool_kernel_size
+    pool_kernel_size = int(np.ceil((img_shape[0] - patch_shape[0] + 1) / pool_size))
+    pool_stride = pool_kernel_size
     # pool_kernel_size = 149 # 141
     # pool_stride = 51 # 55
     # pool_kernel_size = 75 #59 # 69
